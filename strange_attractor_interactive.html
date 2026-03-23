@@ -1,0 +1,120 @@
+
+<style>
+canvas{display:block;border-radius:8px;width:100%;height:auto}
+.controls{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0;font-family:var(--font-sans);font-size:13px;color:var(--color-text-secondary)}
+.ctrl{display:flex;flex-direction:column;gap:3px;min-width:110px}
+label{font-size:11px;color:var(--color-text-tertiary)}
+input[type=range]{width:100%;accent-color:var(--color-text-info,#3b82f6)}
+select{padding:3px 6px;border-radius:5px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px}
+.badge{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);align-self:flex-start}
+button{padding:5px 12px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px;cursor:pointer}
+button:hover{background:var(--color-background-tertiary)}
+</style>
+<canvas id="c"></canvas>
+<div class="controls">
+  <div class="ctrl">
+    <label>attractor type</label>
+    <select id="type">
+      <option value="clifford">Clifford</option>
+      <option value="dejong">De Jong</option>
+      <option value="lorenz">Lorenz (3D proj.)</option>
+    </select>
+  </div>
+  <div class="ctrl"><label>iterations (M)</label><input type="range" id="iters" min="0.5" max="5" value="2" step="0.5"><span class="badge" id="itersV">2M</span></div>
+  <div class="ctrl"><label>point size</label><input type="range" id="psize" min="0.5" max="3" value="1" step="0.5"><span class="badge" id="psizeV">1</span></div>
+  <div class="ctrl"><label>opacity</label><input type="range" id="opa" min="2" max="30" value="8" step="1"><span class="badge" id="opaV">8</span></div>
+  <div class="ctrl"><label>a</label><input type="range" id="pa" min="-3" max="3" value="-1.7" step="0.05"><span class="badge" id="paV">-1.7</span></div>
+  <div class="ctrl"><label>b</label><input type="range" id="pb" min="-3" max="3" value="1.8" step="0.05"><span class="badge" id="pbV">1.8</span></div>
+  <div class="ctrl"><label>c</label><input type="range" id="pc" min="-3" max="3" value="-1.9" step="0.05"><span class="badge" id="pcV">-1.9</span></div>
+  <div class="ctrl"><label>d</label><input type="range" id="pd" min="-3" max="3" value="0.4" step="0.05"><span class="badge" id="pdV">0.4</span></div>
+  <div class="ctrl" style="justify-content:flex-end"><button id="redraw">redraw</button><button id="rng">random params</button></div>
+</div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=640,H=420;
+canvas.width=W;canvas.height=H;
+
+function param(id,suffix){
+  const el=document.getElementById(id),dsp=document.getElementById(id+'V');
+  dsp.textContent=el.value+(suffix||'');
+  el.addEventListener('input',()=>{dsp.textContent=el.value+(suffix||'');render();});
+  return ()=>parseFloat(el.value);
+}
+const getIters=param('iters','M'),getPsize=param('psize'),getOpa=param('opa');
+const getA=param('pa'),getB=param('pb'),getC=param('pc'),getD=param('pd');
+document.getElementById('type').addEventListener('change',()=>render());
+
+function clifford(x,y,a,b,c,d){
+  return [Math.sin(a*y)+c*Math.cos(a*x), Math.sin(b*x)+d*Math.cos(b*y)];
+}
+function dejong(x,y,a,b,c,d){
+  return [Math.sin(a*y)-Math.cos(b*x), Math.sin(c*x)-Math.cos(d*y)];
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  const bg=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  
+  const type=document.getElementById('type').value;
+  const n=getIters()*1000000|0;
+  const a=getA(),b=getB(),c=getC(),d=getD();
+  const opa=getOpa()/100, psize=getPsize();
+  
+  ctx.globalAlpha=opa;
+  const textColor=getComputedStyle(document.documentElement).getPropertyValue('--color-text-primary')||'#111';
+  ctx.fillStyle=textColor;
+  
+  let x=0.1,y=0.1,z=0.1;
+  const pts=[];
+  
+  if(type==='lorenz'){
+    const dt=0.005,sigma=a*3+10,rho=b*14+28,beta=c*0.5+2.67;
+    let lx=0.1,ly=0,lz=0,minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+    const tmp=[];
+    for(let i=0;i<Math.min(n,500000);i++){
+      const dx=sigma*(ly-lx),dy=lx*(rho-lz)-ly,dz=lx*ly-beta*lz;
+      lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;
+      tmp.push([lx,lz]);
+      if(lx<minX)minX=lx;if(lx>maxX)maxX=lx;if(lz<minZ)minZ=lz;if(lz>maxZ)maxZ=lz;
+    }
+    const rx=maxX-minX||1,rz=maxZ-minZ||1;
+    const pad=40;
+    for(const [px,pz] of tmp){
+      const sx=pad+(px-minX)/rx*(W-pad*2), sy=pad+(pz-minZ)/rz*(H-pad*2);
+      ctx.fillRect(sx-psize/2,sy-psize/2,psize,psize);
+    }
+    ctx.globalAlpha=1; return;
+  }
+  
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  const coords=[];
+  for(let i=0;i<n;i++){
+    const [nx,ny]=type==='clifford'?clifford(x,y,a,b,c,d):dejong(x,y,a,b,c,d);
+    x=nx;y=ny;
+    if(i>1000){
+      coords.push([x,y]);
+      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+    }
+  }
+  const rx=maxX-minX||1,ry=maxY-minY||1;
+  const pad=40;
+  for(const [px,py] of coords){
+    const sx=pad+(px-minX)/rx*(W-pad*2), sy=pad+(py-minY)/ry*(H-pad*2);
+    ctx.fillRect(sx-psize/2,sy-psize/2,psize,psize);
+  }
+  ctx.globalAlpha=1;
+}
+
+document.getElementById('redraw').onclick=render;
+document.getElementById('rng').onclick=()=>{
+  ['pa','pb','pc','pd'].forEach(id=>{
+    const el=document.getElementById(id),v=(Math.random()*6-3).toFixed(2);
+    el.value=v;document.getElementById(id+'V').textContent=v;
+  });
+  render();
+};
+
+render();
+</script>

@@ -1,0 +1,150 @@
+
+<style>
+canvas{display:block;border-radius:8px;width:100%;height:auto}
+.controls{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0 4px;font-family:var(--font-sans);font-size:13px;color:var(--color-text-secondary)}
+.ctrl{display:flex;flex-direction:column;gap:3px;min-width:110px}
+label{font-size:11px;color:var(--color-text-tertiary)}
+input[type=range]{width:100%;accent-color:var(--color-text-info,#3b82f6)}
+select{padding:3px 6px;border-radius:5px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px}
+.badge{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);align-self:flex-start}
+.row{display:flex;gap:8px;padding:4px 0 8px;flex-wrap:wrap}
+button{padding:5px 14px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px;cursor:pointer}
+button:hover{background:var(--color-background-tertiary)}
+.section-label{font-size:11px;color:var(--color-text-tertiary);width:100%;padding-top:6px;border-top:1px solid var(--color-border-tertiary);margin-top:4px}
+</style>
+<canvas id="c"></canvas>
+<div class="controls">
+  <div class="section-label">color mode</div>
+  <div class="ctrl" style="min-width:150px">
+    <label>what drives the color</label>
+    <select id="colorMode">
+      <option value="angle">angle (flow direction)</option>
+      <option value="position">position (x gradient)</option>
+      <option value="age">age (particle lifetime)</option>
+      <option value="curl">curl (turbulence)</option>
+      <option value="speed">noise speed</option>
+    </select>
+  </div>
+  <div class="ctrl" style="min-width:150px">
+    <label>palette</label>
+    <select id="palette">
+      <option value="neon">neon (hsl sweep)</option>
+      <option value="fire">fire (red→yellow)</option>
+      <option value="ocean">ocean (teal→violet)</option>
+      <option value="sunset">sunset</option>
+      <option value="mono">monochrome + accent</option>
+      <option value="split">split complementary</option>
+    </select>
+  </div>
+  <div class="ctrl"><label>hue range °</label><input type="range" id="hRange" min="20" max="360" value="240" step="10"><span class="badge" id="hRangeV">240</span></div>
+  <div class="ctrl"><label>hue offset °</label><input type="range" id="hOffset" min="0" max="360" value="180" step="5"><span class="badge" id="hOffsetV">180</span></div>
+  <div class="ctrl"><label>saturation %</label><input type="range" id="sat" min="20" max="100" value="80" step="5"><span class="badge" id="satV">80</span></div>
+  <div class="ctrl"><label>lightness %</label><input type="range" id="lit" min="20" max="80" value="55" step="5"><span class="badge" id="litV">55</span></div>
+
+  <div class="section-label">field</div>
+  <div class="ctrl"><label>noise scale</label><input type="range" id="nScale" min="100" max="1200" value="420" step="50"><span class="badge" id="nScaleV">420</span></div>
+  <div class="ctrl"><label>particles</label><input type="range" id="nPart" min="200" max="5000" value="1800" step="100"><span class="badge" id="nPartV">1800</span></div>
+  <div class="ctrl"><label>step length</label><input type="range" id="step" min="1" max="8" value="3" step="0.5"><span class="badge" id="stepV">3</span></div>
+  <div class="ctrl"><label>lifetime</label><input type="range" id="life" min="20" max="250" value="90" step="5"><span class="badge" id="lifeV">90</span></div>
+  <div class="ctrl"><label>line opacity %</label><input type="range" id="opa" min="3" max="60" value="15" step="1"><span class="badge" id="opaV">15</span></div>
+  <div class="ctrl"><label>bg fade (trail)</label><input type="range" id="fade" min="0" max="15" value="0" step="1"><span class="badge" id="fadeV">0</span></div>
+</div>
+<div class="row">
+  <button id="reseed">new field</button>
+  <button id="clear">clear canvas</button>
+  <button id="pause">pause</button>
+</div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=640,H=420;
+canvas.width=W;canvas.height=H;
+
+function param(id,suffix){
+  const el=document.getElementById(id),dsp=document.getElementById(id+'V');
+  if(dsp){dsp.textContent=el.value+(suffix||'');el.addEventListener('input',()=>{dsp.textContent=el.value+(suffix||'')});}
+  return ()=>parseFloat(el.value);
+}
+const getNScale=param('nScale'),getNPart=param('nPart'),getStep=param('step'),getLife=param('life'),getOpa=param('opa'),getFade=param('fade');
+const getHRange=param('hRange'),getHOffset=param('hOffset'),getSat=param('sat'),getLit=param('lit');
+
+function hash(x,y){let n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-(n|0);}
+function noise(x,y){
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const s=fx*fx*(3-2*fx),t=fy*fy*(3-2*fy);
+  return hash(ix,iy)*(1-s)*(1-t)+hash(ix+1,iy)*s*(1-t)+hash(ix,iy+1)*(1-s)*t+hash(ix+1,iy+1)*s*t;
+}
+
+let seed=Math.random()*1000, particles=[], paused=false, raf;
+
+function fieldAngle(x,y){
+  const sc=getNScale();
+  return noise(x/sc+seed, y/sc+seed+7.3)*Math.PI*4;
+}
+
+function fieldCurl(x,y){
+  const e=2;
+  const a1=fieldAngle(x+e,y), a2=fieldAngle(x-e,y), a3=fieldAngle(x,y+e), a4=fieldAngle(x,y-e);
+  return Math.abs((a1-a2)/(2*e)-(a3-a4)/(2*e));
+}
+
+const palettes={
+  neon:(t,angle,x,y,age,curl)=>{const h=(getHOffset()+t*getHRange())%360;return `hsla(${h},${getSat()}%,${getLit()}%,1)`;},
+  fire:(t,angle,x,y,age,curl)=>{const h=getHOffset()%360+t*(Math.min(getHRange(),90));return `hsla(${h},${getSat()}%,${getLit()+(t*20)}%,1)`;},
+  ocean:(t,angle,x,y,age,curl)=>{const h=(200+getHOffset()%60+t*Math.min(getHRange(),120))%360;return `hsla(${h},${getSat()}%,${getLit()}%,1)`;},
+  sunset:(t,angle,x,y,age,curl)=>{const stops=[[15,90,55],[35,85,60],[55,70,55],[275,60,45]];const i=Math.min(3,Math.floor(t*4)),f=t*4-i;const a=stops[i],b=stops[Math.min(3,i+1)];return `hsla(${a[0]+(b[0]-a[0])*f},${a[1]}%,${a[2]}%,1)`;},
+  mono:(t,angle,x,y,age,curl)=>{const accent=curl>0.3;return accent?`hsla(${getHOffset()},${getSat()}%,${getLit()}%,1)`:`hsla(0,0%,${20+t*60}%,1)`;},
+  split:(t,angle,x,y,age,curl)=>{const base=getHOffset();const h=t<0.5?base:(base+150+t*getHRange()*0.5)%360;return `hsla(${h},${getSat()}%,${getLit()}%,1)`;},
+};
+
+function getColor(p){
+  const mode=document.getElementById('colorMode').value;
+  const pal=palettes[document.getElementById('palette').value];
+  const angle=fieldAngle(p.x,p.y);
+  const curl=fieldCurl(p.x,p.y)*5;
+  let t=0;
+  if(mode==='angle') t=((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI*2);
+  else if(mode==='position') t=p.x/W;
+  else if(mode==='age') t=p.age/p.maxAge;
+  else if(mode==='curl') t=Math.min(1,curl);
+  else if(mode==='speed'){
+    const sc=getNScale();
+    t=noise(p.x/sc+seed+100, p.y/sc+seed+100);
+  }
+  return pal(t,angle,p.x,p.y,p.age,curl);
+}
+
+function makeParticle(){return {x:Math.random()*W,y:Math.random()*H,age:0,maxAge:getLife()+(Math.random()*40|0)};}
+function restart(){particles=[];const n=getNPart()|0;for(let i=0;i<n;i++)particles.push(makeParticle());}
+
+function draw(){
+  const fade=getFade();
+  if(fade>0){ctx.globalAlpha=fade/100;ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';ctx.fillRect(0,0,W,H);}
+  const step=getStep();
+  ctx.lineWidth=1;
+  for(const p of particles){
+    const angle=fieldAngle(p.x,p.y);
+    const nx=p.x+Math.cos(angle)*step, ny=p.y+Math.sin(angle)*step;
+    ctx.globalAlpha=getOpa()/100;
+    ctx.strokeStyle=getColor(p);
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(nx,ny);ctx.stroke();
+    p.x=nx;p.y=ny;p.age++;
+    if(p.age>p.maxAge||p.x<0||p.x>W||p.y<0||p.y>H){
+      const np=getNPart()|0;
+      if(particles.length>np){particles.splice(particles.indexOf(p),1);}
+      else{p.x=Math.random()*W;p.y=Math.random()*H;p.age=0;p.maxAge=getLife()+(Math.random()*40|0);}
+    }
+  }
+  while(particles.length<(getNPart()|0)) particles.push(makeParticle());
+}
+
+function loop(){if(!paused)draw();raf=requestAnimationFrame(loop);}
+
+ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';
+ctx.fillRect(0,0,W,H);
+restart();loop();
+
+document.getElementById('reseed').onclick=()=>{seed=Math.random()*1000;ctx.clearRect(0,0,W,H);ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';ctx.fillRect(0,0,W,H);restart();};
+document.getElementById('clear').onclick=()=>{ctx.clearRect(0,0,W,H);ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';ctx.fillRect(0,0,W,H);};
+document.getElementById('pause').onclick=function(){paused=!paused;this.textContent=paused?'resume':'pause';};
+</script>

@@ -1,0 +1,86 @@
+
+<style>
+body{margin:0}
+canvas{display:block;border-radius:8px;width:100%;height:auto}
+.controls{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0;font-family:var(--font-sans);font-size:13px;color:var(--color-text-secondary)}
+.ctrl{display:flex;flex-direction:column;gap:3px;min-width:100px}
+label{font-size:11px;color:var(--color-text-tertiary)}
+input[type=range]{width:100%;accent-color:var(--color-text-info,#3b82f6)}
+button{padding:5px 12px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px;cursor:pointer}
+button:hover{background:var(--color-background-tertiary)}
+.badge{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);align-self:flex-start}
+</style>
+<canvas id="c"></canvas>
+<div class="controls">
+  <div class="ctrl"><label>particles</label><input type="range" id="nPart" min="200" max="4000" value="1200" step="100"><span class="badge" id="nPartV">1200</span></div>
+  <div class="ctrl"><label>noise scale</label><input type="range" id="nScale" min="100" max="1200" value="400" step="50"><span class="badge" id="nScaleV">400</span></div>
+  <div class="ctrl"><label>step length</label><input type="range" id="step" min="1" max="8" value="3" step="0.5"><span class="badge" id="stepV">3</span></div>
+  <div class="ctrl"><label>lifetime</label><input type="range" id="life" min="20" max="200" value="80" step="5"><span class="badge" id="lifeV">80</span></div>
+  <div class="ctrl"><label>opacity</label><input type="range" id="opa" min="5" max="60" value="18" step="1"><span class="badge" id="opaV">18</span></div>
+  <div class="ctrl" style="justify-content:flex-end"><button id="reset">re-seed</button><button id="clear">clear</button></div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 640, H = 420;
+canvas.width = W; canvas.height = H;
+
+function param(id,display){
+  const el=document.getElementById(id),dsp=document.getElementById(display||id+'V');
+  dsp.textContent=el.value;
+  el.addEventListener('input',()=>{dsp.textContent=el.value;restart()});
+  return ()=>parseFloat(el.value);
+}
+const getNPart=param('nPart'), getNScale=param('nScale'), getStep=param('step'), getLife=param('life'), getOpa=param('opa');
+
+// Simple value noise
+function hash(x,y){let n=Math.sin(x*127.1+y*311.7)*43758.5453;return n-(n|0);}
+function noise(x,y){
+  const ix=Math.floor(x),iy=Math.floor(y);
+  const fx=x-ix,fy=y-iy;
+  const s=fx*fx*(3-2*fx),t=fy*fy*(3-2*fy);
+  return hash(ix,iy)*(1-s)*(1-t)+hash(ix+1,iy)*s*(1-t)+hash(ix,iy+1)*(1-s)*t+hash(ix+1,iy+1)*s*t;
+}
+function fieldAngle(x,y,scale,seed){
+  const nx=x/scale+seed, ny=y/scale+seed;
+  const n=noise(nx,ny);
+  return n*Math.PI*4;
+}
+
+let particles=[], seed=Math.random()*1000, raf;
+
+function makeParticle(){
+  return {x:Math.random()*W, y:Math.random()*H, age:0, maxAge:getLife()+(Math.random()*40|0)};
+}
+
+function restart(){
+  particles=[];
+  for(let i=0;i<getNPart();i++) particles.push(makeParticle());
+}
+
+function draw(){
+  const step=getStep(), scale=getNScale(), opa=getOpa();
+  ctx.globalAlpha=opa/100;
+  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--color-text-primary')||'#222';
+  ctx.lineWidth=0.8;
+  for(const p of particles){
+    const angle=fieldAngle(p.x,p.y,scale,seed);
+    const nx=p.x+Math.cos(angle)*step;
+    const ny=p.y+Math.sin(angle)*step;
+    ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(nx,ny); ctx.stroke();
+    p.x=nx; p.y=ny; p.age++;
+    if(p.age>p.maxAge||p.x<0||p.x>W||p.y<0||p.y>H){
+      p.x=Math.random()*W; p.y=Math.random()*H; p.age=0; p.maxAge=getLife()+(Math.random()*40|0);
+    }
+  }
+}
+
+function loop(){draw();raf=requestAnimationFrame(loop);}
+
+document.getElementById('reset').onclick=()=>{seed=Math.random()*1000;ctx.clearRect(0,0,W,H);restart();};
+document.getElementById('clear').onclick=()=>ctx.clearRect(0,0,W,H);
+
+ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';
+ctx.fillRect(0,0,W,H);
+restart(); loop();
+</script>

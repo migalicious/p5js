@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>flow field</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0c;
+    --surface:   #131318;
+    --surface2:  #1c1c24;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8e8f0;
+    --text-muted:#7a7a90;
+    --text-dim:  #44445a;
+    --accent:    #7c6cfc;
+    --accent2:   #fc6cb4;
+    --radius:    10px;
+    --font-ui:   'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 20px 40px;
+    gap: 16px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 4px;
+  }
+
+  header h1 {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: lowercase;
+  }
+
+  header span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+
+  #canvas-wrap {
+    width: 100%;
+    max-width: 860px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+    position: relative;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  #status {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.06em;
+    pointer-events: none;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 860px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px 20px;
+  }
+
+  .ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ctrl label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: lowercase;
+    font-family: var(--font-mono);
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  input[type=range] {
+    flex: 1;
+    height: 3px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--surface2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--text);
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  input[type=range]:hover::-webkit-slider-thumb {
+    background: var(--accent);
+  }
+
+  input[type=range]::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--text);
+    border: none;
+    cursor: pointer;
+  }
+
+  .val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 32px;
+    text-align: right;
+  }
+
+  select {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7a90' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  select:focus {
+    border-color: var(--accent);
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  button {
+    padding: 7px 16px;
+    border-radius: 7px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+    text-transform: lowercase;
+  }
+
+  button:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(124,108,252,0.12);
+  }
+
+  button.primary {
+    background: rgba(124,108,252,0.18);
+    border-color: rgba(124,108,252,0.5);
+    color: #b8afff;
+  }
+
+  button.primary:hover {
+    background: rgba(124,108,252,0.28);
+    border-color: var(--accent);
+  }
+
+  button#pauseBtn.active {
+    background: rgba(252,108,180,0.15);
+    border-color: rgba(252,108,180,0.4);
+    color: #ffb0d8;
+  }
+
+  kbd {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text-dim);
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  .tip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>flow field</h1>
+  <span>noise-driven particle system</span>
+</header>
+
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div id="status">● live</div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">color</div>
+  <div class="grid">
+    <div class="ctrl" style="grid-column: span 2;">
+      <label>what drives the color</label>
+      <select id="colorMode">
+        <option value="angle">angle — flow direction</option>
+        <option value="position">position — x gradient</option>
+        <option value="age">age — particle lifetime</option>
+        <option value="curl">curl — turbulence</option>
+        <option value="speed">speed — noise value</option>
+      </select>
+    </div>
+    <div class="ctrl" style="grid-column: span 2;">
+      <label>palette</label>
+      <select id="palette">
+        <option value="neon">neon — full hsl sweep</option>
+        <option value="fire">fire — red to yellow</option>
+        <option value="ocean">ocean — teal to violet</option>
+        <option value="sunset">sunset — warm gradient</option>
+        <option value="mono">mono — gray + accent</option>
+        <option value="split">split complementary</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>hue range °</label>
+      <div class="ctrl-row"><input type="range" id="hRange" min="20" max="360" value="240" step="10"><span class="val" id="hRangeV">240</span></div>
+    </div>
+    <div class="ctrl">
+      <label>hue offset °</label>
+      <div class="ctrl-row"><input type="range" id="hOffset" min="0" max="360" value="180" step="5"><span class="val" id="hOffsetV">180</span></div>
+    </div>
+    <div class="ctrl">
+      <label>saturation %</label>
+      <div class="ctrl-row"><input type="range" id="sat" min="20" max="100" value="80" step="5"><span class="val" id="satV">80</span></div>
+    </div>
+    <div class="ctrl">
+      <label>lightness %</label>
+      <div class="ctrl-row"><input type="range" id="lit" min="20" max="80" value="55" step="5"><span class="val" id="litV">55</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-title">field</div>
+  <div class="grid">
+    <div class="ctrl">
+      <label>noise scale</label>
+      <div class="ctrl-row"><input type="range" id="nScale" min="100" max="1200" value="420" step="50"><span class="val" id="nScaleV">420</span></div>
+    </div>
+    <div class="ctrl">
+      <label>particles</label>
+      <div class="ctrl-row"><input type="range" id="nPart" min="200" max="6000" value="1800" step="100"><span class="val" id="nPartV">1800</span></div>
+    </div>
+    <div class="ctrl">
+      <label>step length</label>
+      <div class="ctrl-row"><input type="range" id="step" min="1" max="10" value="3" step="0.5"><span class="val" id="stepV">3</span></div>
+    </div>
+    <div class="ctrl">
+      <label>lifetime</label>
+      <div class="ctrl-row"><input type="range" id="life" min="20" max="300" value="90" step="5"><span class="val" id="lifeV">90</span></div>
+    </div>
+    <div class="ctrl">
+      <label>line opacity %</label>
+      <div class="ctrl-row"><input type="range" id="opa" min="3" max="70" value="15" step="1"><span class="val" id="opaV">15</span></div>
+    </div>
+    <div class="ctrl">
+      <label>bg fade — trail</label>
+      <div class="ctrl-row"><input type="range" id="fade" min="0" max="15" value="0" step="1"><span class="val" id="fadeV">0</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="padding: 14px 20px;">
+  <div class="actions">
+    <button class="primary" id="reseedBtn">new field</button>
+    <button id="clearBtn">clear canvas</button>
+    <button id="pauseBtn">pause<kbd>space</kbd></button>
+    <span class="tip">open in browser for full res</span>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const W = 1280, H = 800;
+canvas.width = W; canvas.height = H;
+
+function param(id) {
+  const el = document.getElementById(id), dsp = document.getElementById(id + 'V');
+  if (dsp) { dsp.textContent = el.value; el.addEventListener('input', () => dsp.textContent = el.value); }
+  return () => parseFloat(el.value);
+}
+
+const getNScale = param('nScale'), getNPart = param('nPart'), getStep = param('step');
+const getLife = param('life'), getOpa = param('opa'), getFade = param('fade');
+const getHRange = param('hRange'), getHOffset = param('hOffset'), getSat = param('sat'), getLit = param('lit');
+
+document.getElementById('colorMode').addEventListener('change', () => {});
+document.getElementById('palette').addEventListener('change', () => {});
+
+function hash(x, y) { let n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return n - (n | 0); }
+function noise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const s = fx * fx * (3 - 2 * fx), t = fy * fy * (3 - 2 * fy);
+  return hash(ix,iy)*(1-s)*(1-t) + hash(ix+1,iy)*s*(1-t) + hash(ix,iy+1)*(1-s)*t + hash(ix+1,iy+1)*s*t;
+}
+
+let seed = Math.random() * 1000;
+let particles = [], paused = false, raf;
+let frameCount = 0;
+
+function fieldAngle(x, y) {
+  const sc = getNScale();
+  return noise(x / sc + seed, y / sc + seed + 7.3) * Math.PI * 4;
+}
+
+function fieldCurl(x, y) {
+  const e = 2;
+  const a1 = fieldAngle(x+e,y), a2 = fieldAngle(x-e,y), a3 = fieldAngle(x,y+e), a4 = fieldAngle(x,y-e);
+  return Math.abs((a1-a2)/(2*e) - (a3-a4)/(2*e));
+}
+
+const palettes = {
+  neon:  (t) => { const h = (getHOffset() + t * getHRange()) % 360; return `hsla(${h},${getSat()}%,${getLit()}%,1)`; },
+  fire:  (t) => { const h = getHOffset() % 360 + t * Math.min(getHRange(), 90); return `hsla(${h},${getSat()}%,${getLit() + t*20}%,1)`; },
+  ocean: (t) => { const h = (200 + getHOffset()%60 + t * Math.min(getHRange(), 120)) % 360; return `hsla(${h},${getSat()}%,${getLit()}%,1)`; },
+  sunset:(t) => { const stops=[[15,90,55],[35,85,60],[55,70,55],[275,60,45]]; const i=Math.min(3,Math.floor(t*4)),f=t*4-i; const a=stops[i],b=stops[Math.min(3,i+1)]; return `hsla(${a[0]+(b[0]-a[0])*f},${a[1]}%,${a[2]}%,1)`; },
+  mono:  (t,curl) => curl>0.3 ? `hsla(${getHOffset()},${getSat()}%,${getLit()}%,1)` : `hsla(0,0%,${20+t*60}%,1)`,
+  split: (t) => { const base=getHOffset(); const h=t<0.5?base:(base+150+t*getHRange()*0.5)%360; return `hsla(${h},${getSat()}%,${getLit()}%,1)`; },
+};
+
+function getColor(p) {
+  const mode = document.getElementById('colorMode').value;
+  const pal  = palettes[document.getElementById('palette').value];
+  const angle = fieldAngle(p.x, p.y);
+  const curl  = fieldCurl(p.x, p.y) * 5;
+  let t = 0;
+  if      (mode === 'angle')    t = ((angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2) / (Math.PI*2);
+  else if (mode === 'position') t = p.x / W;
+  else if (mode === 'age')      t = p.age / p.maxAge;
+  else if (mode === 'curl')     t = Math.min(1, curl);
+  else if (mode === 'speed')    t = noise(p.x / getNScale() + seed + 100, p.y / getNScale() + seed + 100);
+  return pal(t, curl);
+}
+
+function makeParticle() {
+  return { x: Math.random()*W, y: Math.random()*H, age: 0, maxAge: getLife() + (Math.random()*40|0) };
+}
+
+function restart() {
+  particles = [];
+  const n = getNPart() | 0;
+  for (let i = 0; i < n; i++) particles.push(makeParticle());
+}
+
+function draw() {
+  const fade = getFade();
+  if (fade > 0) {
+    ctx.globalAlpha = fade / 100;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+  }
+  const step = getStep();
+  ctx.lineWidth = 0.9;
+  for (const p of particles) {
+    const angle = fieldAngle(p.x, p.y);
+    const nx = p.x + Math.cos(angle) * step;
+    const ny = p.y + Math.sin(angle) * step;
+    ctx.globalAlpha = getOpa() / 100;
+    ctx.strokeStyle = getColor(p);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nx, ny); ctx.stroke();
+    p.x = nx; p.y = ny; p.age++;
+    if (p.age > p.maxAge || p.x < 0 || p.x > W || p.y < 0 || p.y > H) {
+      if (particles.length > (getNPart()|0)) particles.splice(particles.indexOf(p), 1);
+      else { p.x = Math.random()*W; p.y = Math.random()*H; p.age = 0; p.maxAge = getLife()+(Math.random()*40|0); }
+    }
+  }
+  while (particles.length < (getNPart()|0)) particles.push(makeParticle());
+  frameCount++;
+}
+
+function loop() {
+  if (!paused) draw();
+  raf = requestAnimationFrame(loop);
+}
+
+ctx.fillStyle = '#000';
+ctx.fillRect(0, 0, W, H);
+restart();
+loop();
+
+document.getElementById('reseedBtn').onclick = () => {
+  seed = Math.random() * 1000;
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+  restart();
+};
+
+document.getElementById('clearBtn').onclick = () => {
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+};
+
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.onclick = () => {
+  paused = !paused;
+  pauseBtn.textContent = paused ? 'resume' : 'pause';
+  pauseBtn.innerHTML += '<kbd>space</kbd>';
+  pauseBtn.classList.toggle('active', paused);
+  statusEl.textContent = paused ? '⏸ paused' : '● live';
+};
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+    e.preventDefault();
+    pauseBtn.click();
+  }
+});
+</script>
+</body>
+</html>

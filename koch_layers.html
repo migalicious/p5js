@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>koch layers</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0c;
+    --surface:   #131318;
+    --surface2:  #1c1c24;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8e8f0;
+    --text-muted:#7a7a90;
+    --text-dim:  #44445a;
+    --accent:    #7c6cfc;
+    --accent2:   #fc6cb4;
+    --radius:    10px;
+    --font-ui:   'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 20px 40px;
+    gap: 16px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 4px;
+  }
+
+  header h1 {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: lowercase;
+  }
+
+  header span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+
+  #canvas-wrap {
+    width: 100%;
+    max-width: 860px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .panel {
+    width: 100%;
+    max-width: 860px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .panel-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px 20px;
+  }
+
+  .ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ctrl label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: lowercase;
+    font-family: var(--font-mono);
+  }
+
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  input[type=range] {
+    flex: 1;
+    height: 3px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--surface2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--text);
+    border: none; cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  input[type=range]:hover::-webkit-slider-thumb { background: var(--accent); }
+  input[type=range]::-moz-range-thumb { width:13px;height:13px;border-radius:50%;background:var(--text);border:none;cursor:pointer; }
+
+  .val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  input[type=color] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 32px; height: 22px;
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    background: none;
+    cursor: pointer;
+    padding: 1px;
+  }
+
+  input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+  input[type=checkbox] {
+    width: 14px; height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  select {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7a90' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  /* Layer rows */
+  .layers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .layer-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    flex-wrap: wrap;
+  }
+
+  .layer-row .layer-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    min-width: 48px;
+  }
+
+  .layer-row .lctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 80px;
+  }
+
+  .layer-row .lctrl label {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    letter-spacing: 0.07em;
+  }
+
+  .layer-row .lctrl .ctrl-row { gap: 5px; }
+
+  .layer-row .lctrl .val { font-size: 10px; min-width: 20px; }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  button {
+    padding: 7px 16px;
+    border-radius: 7px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+    text-transform: lowercase;
+  }
+
+  button:hover { border-color: var(--accent); background: rgba(124,108,252,0.12); }
+
+  button.primary {
+    background: rgba(124,108,252,0.18);
+    border-color: rgba(124,108,252,0.5);
+    color: #b8afff;
+  }
+
+  button.primary:hover { background: rgba(124,108,252,0.28); border-color: var(--accent); }
+
+  .tip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: auto;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>koch layers</h1>
+  <span>layered l-system snowflake explorer</span>
+</header>
+
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<!-- Global settings -->
+<div class="panel">
+  <div class="panel-title">global</div>
+  <div class="grid">
+    <div class="ctrl">
+      <label>background</label>
+      <input type="color" id="bgColor" value="#000000">
+    </div>
+    <div class="ctrl">
+      <label>blend mode</label>
+      <select id="blendMode">
+        <option value="source-over">normal</option>
+        <option value="screen">screen</option>
+        <option value="lighter">lighter (additive)</option>
+        <option value="difference">difference</option>
+        <option value="multiply">multiply</option>
+        <option value="overlay">overlay</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>rotate all °/s</label>
+      <div class="ctrl-row"><input type="range" id="rotSpeed" min="0" max="60" value="0" step="1"><span class="val" id="rotSpeedV">0</span></div>
+    </div>
+    <div class="ctrl">
+      <label>animate</label>
+      <div style="display:flex;align-items:center;gap:8px;padding-top:4px">
+        <input type="checkbox" id="animateChk">
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">rotation on</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Layers -->
+<div class="panel">
+  <div class="panel-title">layers — each is an independent koch curve drawn on top</div>
+  <div class="layers-list" id="layersList"></div>
+  <div class="actions" style="padding-top:4px">
+    <button id="addLayer">+ add layer</button>
+    <span class="tip">up to 6 layers</span>
+  </div>
+</div>
+
+<div class="panel" style="padding:14px 20px">
+  <div class="actions">
+    <button class="primary" id="redrawBtn">redraw</button>
+    <button id="clearBtn">clear</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 860, H = 680;
+canvas.width = W; canvas.height = H;
+
+let animRaf;
+let globalRotation = 0;
+let lastTime = 0;
+
+// -- Koch expand
+function expandKoch(axiom, rules, n) {
+  let s = axiom;
+  for (let i = 0; i < n; i++) {
+    let ns = '';
+    for (const c of s) ns += (rules[c] || c);
+    s = ns;
+    if (s.length > 300000) break;
+  }
+  return s;
+}
+
+function drawLSystem(offCtx, str, x, y, len, startAngle, angleDeg, color, alpha, lineW) {
+  const angle = angleDeg * Math.PI / 180;
+  let cx = x, cy = y, dir = startAngle;
+  const stack = [];
+  offCtx.strokeStyle = color;
+  offCtx.globalAlpha = alpha;
+  offCtx.lineWidth = lineW;
+  offCtx.lineCap = 'round';
+  offCtx.beginPath();
+  offCtx.moveTo(cx, cy);
+  for (const c of str) {
+    if (c === 'F') {
+      const nx = cx + Math.cos(dir) * len, ny = cy + Math.sin(dir) * len;
+      offCtx.lineTo(nx, ny);
+      cx = nx; cy = ny;
+    } else if (c === '+') { dir += angle; }
+    else if (c === '-') { dir -= angle; }
+    else if (c === '[') { stack.push({cx,cy,dir}); }
+    else if (c === ']') { const s=stack.pop(); cx=s.cx; cy=s.cy; dir=s.dir; offCtx.moveTo(cx,cy); }
+  }
+  offCtx.stroke();
+}
+
+// Layer config
+const defaultLayers = [
+  { iters: 4, angle: 60, scale: 78, color: '#a78bfa', alpha: 0.85, lineW: 1.2, rotation: 0,   axiom: 'F++F++F',     rules: 'F:F-F++F-F', enabled: true },
+  { iters: 3, angle: 60, scale: 55, color: '#38bdf8', alpha: 0.55, lineW: 0.8, rotation: 30,  axiom: 'F++F++F',     rules: 'F:F-F++F-F', enabled: true },
+  { iters: 5, angle: 60, scale: 38, color: '#f472b6', alpha: 0.40, lineW: 0.5, rotation: 15,  axiom: 'F++F++F',     rules: 'F:F-F++F-F', enabled: true },
+];
+
+let layers = defaultLayers.map(l => ({...l}));
+
+function parseRules(str) {
+  const rules = {};
+  for (const part of str.split(',')) {
+    const [k, v] = part.split(':');
+    if (k && v) rules[k.trim()] = v.trim();
+  }
+  return rules;
+}
+
+function computeLayerLen(iters, scale) {
+  return (Math.min(W, H) / 2) * (scale / 100) * Math.pow(1/3, iters - 1) * 3;
+}
+
+function redraw(extraRot = 0) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = document.getElementById('bgColor').value;
+  ctx.fillRect(0, 0, W, H);
+
+  const blend = document.getElementById('blendMode').value;
+
+  for (const layer of layers) {
+    if (!layer.enabled) continue;
+    const rules = parseRules(layer.rules);
+    const iters = Math.min(layer.iters, 6);
+    const str = expandKoch(layer.axiom, rules, iters);
+    const len = computeLayerLen(iters, layer.scale);
+    const totalRot = (layer.rotation + extraRot) * Math.PI / 180;
+    const cx = W / 2, cy = H / 2;
+    const r = (Math.min(W, H) / 2) * (layer.scale / 100) * 0.88;
+    const startX = cx + Math.cos(totalRot) * r;
+    const startY = cy + Math.sin(totalRot) * r;
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = W; offCanvas.height = H;
+    const offCtx = offCanvas.getContext('2d');
+    offCtx.globalAlpha = 1;
+
+    drawLSystem(offCtx, str, startX, startY, len, totalRot, layer.angle, layer.color, layer.alpha, layer.lineW);
+
+    ctx.globalCompositeOperation = blend;
+    ctx.globalAlpha = 1;
+    ctx.drawImage(offCanvas, 0, 0);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+}
+
+// Animation
+function animate(ts) {
+  if (!document.getElementById('animateChk').checked) { animRaf = requestAnimationFrame(animate); return; }
+  const dt = ts - lastTime; lastTime = ts;
+  const speed = parseFloat(document.getElementById('rotSpeedV').textContent) || 0;
+  globalRotation = (globalRotation + speed * dt / 1000) % 360;
+  redraw(globalRotation);
+  animRaf = requestAnimationFrame(animate);
+}
+
+// UI: render layer controls
+function renderLayerUI() {
+  const list = document.getElementById('layersList');
+  list.innerHTML = '';
+  layers.forEach((layer, idx) => {
+    const row = document.createElement('div');
+    row.className = 'layer-row';
+    row.innerHTML = `
+      <span class="layer-label">layer ${idx+1}</span>
+      <label style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);cursor:pointer">
+        <input type="checkbox" ${layer.enabled?'checked':''} data-idx="${idx}" class="l-enabled">
+        on
+      </label>
+      <div class="lctrl"><label>color</label><input type="color" value="${layer.color}" data-idx="${idx}" class="l-color"></div>
+      <div class="lctrl"><label>iterations</label><div class="ctrl-row"><input type="range" min="1" max="6" value="${layer.iters}" step="1" data-idx="${idx}" class="l-iters"><span class="val l-itersV">${layer.iters}</span></div></div>
+      <div class="lctrl"><label>size %</label><div class="ctrl-row"><input type="range" min="10" max="100" value="${layer.scale}" step="2" data-idx="${idx}" class="l-scale"><span class="val l-scaleV">${layer.scale}</span></div></div>
+      <div class="lctrl"><label>angle °</label><div class="ctrl-row"><input type="range" min="10" max="120" value="${layer.angle}" step="1" data-idx="${idx}" class="l-angle"><span class="val l-angleV">${layer.angle}</span></div></div>
+      <div class="lctrl"><label>offset °</label><div class="ctrl-row"><input type="range" min="0" max="359" value="${layer.rotation}" step="1" data-idx="${idx}" class="l-rotation"><span class="val l-rotationV">${layer.rotation}</span></div></div>
+      <div class="lctrl"><label>opacity</label><div class="ctrl-row"><input type="range" min="5" max="100" value="${Math.round(layer.alpha*100)}" step="5" data-idx="${idx}" class="l-alpha"><span class="val l-alphaV">${Math.round(layer.alpha*100)}</span></div></div>
+      <div class="lctrl"><label>line width</label><div class="ctrl-row"><input type="range" min="2" max="30" value="${Math.round(layer.lineW*10)}" step="1" data-idx="${idx}" class="l-lineW"><span class="val l-lineWV">${layer.lineW}</span></div></div>
+      ${layers.length > 1 ? `<button data-idx="${idx}" class="l-remove" style="padding:4px 10px;font-size:10px;margin-left:auto">remove</button>` : ''}
+    `;
+    list.appendChild(row);
+  });
+
+  list.querySelectorAll('.l-enabled').forEach(el => el.addEventListener('change', e => { layers[+e.target.dataset.idx].enabled = e.target.checked; redraw(globalRotation); }));
+  list.querySelectorAll('.l-color').forEach(el => el.addEventListener('input', e => { layers[+e.target.dataset.idx].color = e.target.value; redraw(globalRotation); }));
+
+  const bindSlider = (cls, prop, transform) => {
+    list.querySelectorAll('.' + cls).forEach(el => {
+      const valEl = el.parentElement.querySelector('.' + cls + 'V');
+      el.addEventListener('input', e => {
+        const v = parseFloat(e.target.value);
+        const idx = +e.target.dataset.idx;
+        layers[idx][prop] = transform ? transform(v) : v;
+        if (valEl) valEl.textContent = transform ? transform(v) : v;
+        redraw(globalRotation);
+      });
+    });
+  };
+
+  bindSlider('l-iters', 'iters');
+  bindSlider('l-scale', 'scale');
+  bindSlider('l-angle', 'angle');
+  bindSlider('l-rotation', 'rotation');
+  bindSlider('l-alpha', 'alpha', v => v/100);
+  bindSlider('l-lineW', 'lineW', v => v/10);
+
+  list.querySelectorAll('.l-alphaV').forEach((el, idx) => el.textContent = Math.round(layers[idx].alpha * 100));
+  list.querySelectorAll('.l-lineWV').forEach((el, idx) => el.textContent = layers[idx].lineW);
+
+  list.querySelectorAll('.l-remove').forEach(el => el.addEventListener('click', e => {
+    layers.splice(+e.target.dataset.idx, 1);
+    renderLayerUI(); redraw(globalRotation);
+  }));
+}
+
+document.getElementById('addLayer').onclick = () => {
+  if (layers.length >= 6) return;
+  layers.push({ iters: 3, angle: 60, scale: 50, color: '#' + Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0'), alpha: 0.6, lineW: 0.8, rotation: Math.floor(Math.random()*120), axiom: 'F++F++F', rules: 'F:F-F++F-F', enabled: true });
+  renderLayerUI(); redraw(globalRotation);
+};
+
+document.getElementById('redrawBtn').onclick = () => redraw(globalRotation);
+document.getElementById('clearBtn').onclick = () => { ctx.fillStyle=document.getElementById('bgColor').value; ctx.fillRect(0,0,W,H); };
+document.getElementById('bgColor').addEventListener('input', () => redraw(globalRotation));
+document.getElementById('blendMode').addEventListener('change', () => redraw(globalRotation));
+
+const rotSpeedEl = document.getElementById('rotSpeed');
+rotSpeedEl.addEventListener('input', () => { document.getElementById('rotSpeedV').textContent = rotSpeedEl.value; });
+
+// Init
+renderLayerUI();
+redraw(0);
+lastTime = performance.now();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
