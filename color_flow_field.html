@@ -200,34 +200,7 @@
     border: 1px solid var(--border2); color: var(--text-dim); margin-left: 3px;
   }
 
-  /* Export modal */
-  #export-modal {
-    position: fixed; inset: 0; z-index: 100;
-    display: none; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
-  }
-  #export-modal.open { display: flex; }
 
-  .modal-box {
-    background: #131318; border: 1px solid var(--border2);
-    border-radius: 14px; padding: 24px; width: 320px;
-    display: flex; flex-direction: column; gap: 16px;
-  }
-  .modal-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; color: var(--text-muted); text-transform: uppercase; }
-  .modal-note { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); line-height: 1.7; }
-
-  .res-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .res-btn {
-    padding: 8px 4px; border-radius: 7px; border: 1px solid var(--border2);
-    background: var(--surface2); color: var(--text-muted); font-family: var(--font-mono);
-    font-size: 10px; letter-spacing: 0.05em; cursor: pointer; text-align: center; transition: all 0.15s;
-  }
-  .res-btn:hover { border-color: rgba(56,189,248,0.5); color: #7dd3fc; background: rgba(56,189,248,0.08); }
-  .res-btn.selected { border-color: rgba(56,189,248,0.7); color: #7dd3fc; background: rgba(56,189,248,0.15); }
-  .res-label { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
-
-  .modal-actions { display: flex; gap: 8px; }
-  #export-progress { font-family: var(--font-mono); font-size: 10px; color: #7dd3fc; display: none; text-align: center; padding: 4px 0; }
 </style>
 </head>
 <body>
@@ -324,28 +297,7 @@
   </div>
 </div>
 
-<!-- Export modal -->
-<div id="export-modal">
-  <div class="modal-box">
-    <div class="modal-title">export resolution</div>
-    <div class="modal-note">
-      the field rerenders from the same seed at the target resolution — the same composition, just more pixels. 4K may take 5–10 seconds.
-    </div>
-    <div class="res-grid" id="resGrid">
-      <div class="res-btn selected" data-w="1920" data-h="1080">1080p<div class="res-label">1920×1080</div></div>
-      <div class="res-btn" data-w="2560" data-h="1440">1440p<div class="res-label">2560×1440</div></div>
-      <div class="res-btn" data-w="3840" data-h="2160">4K<div class="res-label">3840×2160</div></div>
-      <div class="res-btn" data-w="1080" data-h="1080">square<div class="res-label">1080×1080</div></div>
-      <div class="res-btn" data-w="1080" data-h="1350">portrait<div class="res-label">1080×1350</div></div>
-      <div class="res-btn" data-w="1080" data-h="1920">story<div class="res-label">1080×1920</div></div>
-    </div>
-    <div id="export-progress">rendering…</div>
-    <div class="modal-actions">
-      <button class="export-btn" id="doExportBtn" style="flex:2">render + download</button>
-      <button id="cancelExportBtn" style="flex:1">cancel</button>
-    </div>
-  </div>
-</div>
+
 
 <script>
 const canvas = document.getElementById('c');
@@ -393,7 +345,7 @@ function noise(x, y) {
 }
 
 let seed = Math.random() * 1000;
-let particles = [], paused = false;
+let particles = [], paused = false, pendingClear = false;
 
 function fieldAngle(x, y, sc) {
   return noise(x/(sc||getNScale())+seed, y/(sc||getNScale())+seed+7.3) * Math.PI * 4;
@@ -455,16 +407,27 @@ function draw() {
   while (particles.length<(getNPart()|0)) particles.push(makeParticle());
 }
 
-function loop() { if (!paused) draw(); requestAnimationFrame(loop); }
+function loop() {
+  if (pendingClear) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    pendingClear = false;
+  }
+  if (!paused) draw();
+  requestAnimationFrame(loop);
+}
 
 resizeCanvas();
 loop();
 
 // --- controls ---
 document.getElementById('reseedBtn').onclick = () => {
-  seed=Math.random()*1000; ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); restart();
+  seed = Math.random()*1000;
+  pendingClear = true;
+  restart();
 };
-document.getElementById('clearBtn').onclick = () => { ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); };
+document.getElementById('clearBtn').onclick = () => { pendingClear = true; };
 
 const pauseBtn = document.getElementById('pauseBtn');
 pauseBtn.onclick = () => {
@@ -482,77 +445,17 @@ document.addEventListener('keydown', e => {
 document.getElementById('toggle-panel').onclick = () => document.getElementById('panel').classList.toggle('hidden');
 
 // --- export ---
-const exportModal = document.getElementById('export-modal');
-const resGrid = document.getElementById('resGrid');
-const exportProgress = document.getElementById('export-progress');
-let selectedRes = { w:1920, h:1080 };
 
-resGrid.querySelectorAll('.res-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    resGrid.querySelectorAll('.res-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    selectedRes = { w: parseInt(btn.dataset.w), h: parseInt(btn.dataset.h) };
-  });
-});
-
-document.getElementById('exportBtn').onclick    = () => exportModal.classList.add('open');
-document.getElementById('cancelExportBtn').onclick = () => exportModal.classList.remove('open');
-exportModal.addEventListener('click', e => { if (e.target===exportModal) exportModal.classList.remove('open'); });
-
-document.getElementById('doExportBtn').onclick = () => {
-  const eW = selectedRes.w, eH = selectedRes.h;
-  exportProgress.style.display = 'block';
-  exportProgress.textContent = `rendering ${eW}×${eH} — this may take a moment…`;
-
-  setTimeout(() => {
-    const off = document.createElement('canvas');
-    off.width = eW; off.height = eH;
-    const oc = off.getContext('2d');
-
-    // Scale noise coordinates proportionally so the field looks identical
-    const scaleX = eW / W;
-    const eSc    = getNScale() * scaleX;     // scaled noise lookup
-    const eStep  = getStep()   * scaleX;     // scaled step
-    const eN     = Math.round(getNPart() * scaleX * (eH/H));
-    const eLife  = getLife(), eOpa = getOpa(), eFade = getFade();
-
-    oc.fillStyle = '#000';
-    oc.fillRect(0, 0, eW, eH);
-
-    // Seed particles with staggered ages so we don't start from blank
-    const eParts = [];
-    for (let i=0; i<eN; i++) {
-      const ml = eLife+(Math.random()*40|0);
-      eParts.push({ x:Math.random()*eW, y:Math.random()*eH, age: Math.random()*ml|0, maxAge: ml });
-    }
-
-    const frames = Math.round(eLife * 2.5);
-    oc.lineWidth = 0.9 * scaleX;
-
-    for (let f=0; f<frames; f++) {
-      if (eFade>0) { oc.globalAlpha=eFade/100; oc.fillStyle='#000'; oc.fillRect(0,0,eW,eH); }
-      for (const p of eParts) {
-        const angle = fieldAngle(p.x, p.y, eSc);
-        const nx=p.x+Math.cos(angle)*eStep, ny=p.y+Math.sin(angle)*eStep;
-        oc.globalAlpha = eOpa/100;
-        oc.strokeStyle = colorForParticle(p, eW, eSc);
-        oc.beginPath(); oc.moveTo(p.x,p.y); oc.lineTo(nx,ny); oc.stroke();
-        p.x=nx; p.y=ny; p.age++;
-        if (p.age>p.maxAge||p.x<0||p.x>eW||p.y<0||p.y>eH) {
-          p.x=Math.random()*eW; p.y=Math.random()*eH; p.age=0; p.maxAge=eLife+(Math.random()*40|0);
-        }
-      }
-    }
-
-    off.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href=url; a.download=`flow_field_${eW}x${eH}_${seed.toFixed(0)}.png`;
-      a.click(); URL.revokeObjectURL(url);
-      exportProgress.style.display='none';
-      exportModal.classList.remove('open');
-    }, 'image/png');
-  }, 60);
+// Export: snapshot the live canvas exactly as-is
+document.getElementById('exportBtn').onclick = () => {
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flow_field_${canvas.width}x${canvas.height}_${seed.toFixed(0)}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
 };
 </script>
 </body>
