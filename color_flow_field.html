@@ -253,11 +253,17 @@
     <div class="ctrl"><label>hue offset °</label>
       <div class="ctrl-row"><input type="range" id="hOffset" min="0" max="360" value="180" step="5"><span class="val" id="hOffsetV">180</span></div>
     </div>
+    <div class="ctrl" id="curlAmpCtrl" style="display:none"><label>curl sensitivity</label>
+      <div class="ctrl-row"><input type="range" id="curlAmp" min="1" max="20" value="5" step="0.5"><span class="val" id="curlAmpV">5</span></div>
+    </div>
     <div class="ctrl"><label>saturation %</label>
       <div class="ctrl-row"><input type="range" id="sat" min="20" max="100" value="80" step="5"><span class="val" id="satV">80</span></div>
     </div>
     <div class="ctrl"><label>lightness %</label>
       <div class="ctrl-row"><input type="range" id="lit" min="20" max="80" value="55" step="5"><span class="val" id="litV">55</span></div>
+    </div>
+    <div class="ctrl" id="monoThreshCtrl" style="display:none"><label>accent threshold</label>
+      <div class="ctrl-row"><input type="range" id="monoThresh" min="0.05" max="1" value="0.3" step="0.05"><span class="val" id="monoThreshV">0.3</span></div>
     </div>
   </div>
 
@@ -300,8 +306,8 @@
 
   <div class="actions">
     <div class="btn-row">
-      <button class="primary" id="reseedBtn">new field</button>
-      <button id="clearBtn">clear</button>
+      <button class="primary" id="reseedBtn">new field<kbd>n</kbd></button>
+      <button id="clearBtn">clear<kbd>c</kbd></button>
     </div>
     <div class="btn-row">
       <button id="pauseBtn">pause<kbd>space</kbd></button>
@@ -366,6 +372,7 @@ const getLife=param('life'),     getOpa=param('opa'),     getFade=param('fade');
 const getHRange=param('hRange'), getHOffset=param('hOffset'), getSat=param('sat'), getLit=param('lit');
 const getAngleMult=param('angleMult'), getOctaves=param('octaves'), getLineW=param('lineW'), getLifeVar=param('lifeVar');
 const exportQuality=param('exportQuality');
+const getCurlAmp=param('curlAmp'), getMonoThresh=param('monoThresh');
 
 // Hide quality slider for PNG since it has no effect
 document.getElementById('exportFmt').addEventListener('change', function() {
@@ -405,7 +412,7 @@ const palettes = {
   fire:  (t)      => `hsla(${getHOffset()%360+t*Math.min(getHRange(),90)},${getSat()}%,${getLit()+t*20}%,1)`,
   ocean: (t)      => `hsla(${(200+getHOffset()%60+t*Math.min(getHRange(),120))%360},${getSat()}%,${getLit()}%,1)`,
   sunset:(t)      => { const s=[[15,90,55],[35,85,60],[55,70,55],[275,60,45]],i=Math.min(3,t*4|0),f=t*4-i,a=s[i],b=s[Math.min(3,i+1)]; return `hsla(${a[0]+(b[0]-a[0])*f},${a[1]}%,${a[2]}%,1)`; },
-  mono:  (t,curl) => curl>0.3?`hsla(${getHOffset()},${getSat()}%,${getLit()}%,1)`:`hsla(0,0%,${20+t*60}%,1)`,
+  mono:  (t,curl) => curl>getMonoThresh()?`hsla(${getHOffset()},${getSat()}%,${getLit()}%,1)`:`hsla(0,0%,${20+t*60}%,1)`,
   split: (t)      => { const b=getHOffset(); return `hsla(${(t<0.5?b:(b+150+t*getHRange()*0.5))%360},${getSat()}%,${getLit()}%,1)`; },
 };
 
@@ -413,7 +420,7 @@ function colorForParticle(p, canvasW, sc) {
   const mode = document.getElementById('colorMode').value;
   const pal  = palettes[document.getElementById('palette').value];
   const angle = fieldAngle(p.x, p.y, sc);
-  const curl  = fieldCurl(p.x, p.y, sc) * 5;
+  const curl  = fieldCurl(p.x, p.y, sc) * getCurlAmp();
   let t = 0;
   if      (mode==='angle')    t = ((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI*2);
   else if (mode==='position') t = p.x / canvasW;
@@ -503,9 +510,21 @@ document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.code === 'Space') { e.preventDefault(); pauseBtn.click(); }
   if (e.code === 'KeyF')  { e.preventDefault(); fullscreenBtn.click(); }
+  if (e.code === 'KeyN')  { e.preventDefault(); reseedBtn.click(); }
+  if (e.code === 'KeyC')  { e.preventDefault(); clearBtn.click(); }
 });
 
 document.getElementById('toggle-panel').onclick = () => document.getElementById('panel').classList.toggle('hidden');
+
+function updateColorControls() {
+  const mode = document.getElementById('colorMode').value;
+  const pal  = document.getElementById('palette').value;
+  document.getElementById('curlAmpCtrl').style.display   = mode === 'curl' ? '' : 'none';
+  document.getElementById('monoThreshCtrl').style.display = pal  === 'mono' ? '' : 'none';
+}
+document.getElementById('colorMode').addEventListener('change', updateColorControls);
+document.getElementById('palette').addEventListener('change', updateColorControls);
+updateColorControls();
 
 // --- export ---
 document.getElementById('exportBtn').onclick = () => {
