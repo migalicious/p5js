@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3d geometries</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0c;
+    --surface:   rgba(13, 13, 20, 0.92);
+    --surface2:  #1c1c24;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8e8f0;
+    --text-muted:#7a7a90;
+    --text-dim:  #44445a;
+    --accent:    #7c6cfc;
+    --radius:    10px;
+    --font-ui:   'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --panel-w:   300px;
+  }
+
+  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:var(--font-ui); font-size:13px; color:var(--text); }
+
+  #sketch-container { position:fixed; top:0; left:0; width:100%; height:100%; }
+  #sketch-container canvas { display:block; width:100% !important; height:100% !important; }
+
+  #header {
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:10px; padding:6px 16px;
+    background:var(--surface); border:1px solid var(--border2); border-radius:999px;
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    z-index:10; pointer-events:none; white-space:nowrap;
+  }
+  #header h1 { font-family:var(--font-mono); font-size:12px; font-weight:300; letter-spacing:0.14em; color:var(--text-muted); }
+  #status { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:0.05em; }
+
+  #toggle-panel {
+    position:fixed; top:16px; right:16px; z-index:20;
+    width:36px; height:36px; border-radius:50%;
+    border:1px solid var(--border2); background:var(--surface);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:border-color 0.15s, background 0.15s; color:var(--text-muted);
+  }
+  #toggle-panel:hover { border-color:var(--accent); background:rgba(124,108,252,0.15); color:var(--text); }
+  #toggle-panel svg { pointer-events:none; }
+
+  #panel {
+    position:fixed; top:0; right:0; width:var(--panel-w); height:100%;
+    background:var(--surface); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    border-left:1px solid var(--border2); z-index:15;
+    display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden;
+    transform:translateX(0); transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  #panel.hidden { transform:translateX(100%); }
+  #panel::-webkit-scrollbar { width:4px; }
+  #panel::-webkit-scrollbar-track { background:transparent; }
+  #panel::-webkit-scrollbar-thumb { background:var(--surface2); border-radius:2px; }
+
+  .panel-header { padding:60px 16px 12px; font-family:var(--font-mono); font-size:9px; letter-spacing:0.16em; color:var(--text-dim); text-transform:uppercase; border-bottom:1px solid var(--border); flex-shrink:0; }
+
+  .section { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:12px; }
+  .section-label { font-family:var(--font-mono); font-size:9px; letter-spacing:0.14em; color:var(--text-dim); text-transform:uppercase; }
+
+  .ctrl { display:flex; flex-direction:column; gap:5px; }
+  .ctrl label { font-size:10px; letter-spacing:0.07em; color:var(--text-muted); font-family:var(--font-mono); }
+  .ctrl-row { display:flex; align-items:center; gap:8px; }
+
+  input[type=range] {
+    flex:1; height:3px; -webkit-appearance:none; appearance:none;
+    background:var(--surface2); border-radius:2px; outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--text); border:none; cursor:pointer; transition:background 0.15s; }
+  input[type=range]:hover::-webkit-slider-thumb { background:var(--accent); }
+  input[type=range]::-moz-range-thumb { width:12px;height:12px;border-radius:50%;background:var(--text);border:none;cursor:pointer; }
+
+  .val { font-family:var(--font-mono); font-size:10px; color:var(--text-muted); min-width:36px; text-align:right; }
+
+  select {
+    width:100%; padding:5px 28px 5px 8px;
+    background:var(--surface2); border:1px solid var(--border2);
+    border-radius:6px; color:var(--text); font-family:var(--font-mono);
+    font-size:10px; letter-spacing:0.05em; cursor:pointer; outline:none;
+    -webkit-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7a90' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center;
+  }
+  select:focus { border-color:var(--accent); }
+
+  .actions { padding:14px 16px; display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
+  .btn-row { display:flex; gap:6px; }
+
+  button {
+    flex:1; padding:7px 10px; border-radius:7px;
+    border:1px solid var(--border2); background:var(--surface2); color:var(--text);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:0.06em;
+    cursor:pointer; transition:border-color 0.15s, background 0.15s; text-transform:lowercase;
+  }
+  button:hover { border-color:var(--accent); background:rgba(124,108,252,0.12); }
+  button.primary { background:rgba(124,108,252,0.18); border-color:rgba(124,108,252,0.4); color:#b8afff; }
+  button.primary:hover { background:rgba(124,108,252,0.28); border-color:var(--accent); }
+  button#pauseBtn.active { background:rgba(252,108,180,0.15); border-color:rgba(252,108,180,0.4); color:#ffb0d8; }
+  button.export-btn { background:rgba(56,189,248,0.12); border-color:rgba(56,189,248,0.3); color:#7dd3fc; }
+  button.export-btn:hover { background:rgba(56,189,248,0.22); border-color:rgba(56,189,248,0.6); }
+
+  kbd { display:inline-block; font-family:var(--font-mono); font-size:9px; padding:1px 4px; border-radius:3px; background:rgba(255,255,255,0.06); border:1px solid var(--border2); color:var(--text-dim); margin-left:3px; }
+
+  .shape-pills { display:flex; flex-wrap:wrap; gap:5px; }
+  .pill {
+    padding:4px 9px; border-radius:999px;
+    border:1px solid var(--border2); background:var(--surface2); color:var(--text-muted);
+    font-family:var(--font-mono); font-size:9px; letter-spacing:0.07em;
+    cursor:pointer; transition:border-color 0.15s, background 0.15s, color 0.15s; user-select:none;
+  }
+  .pill.on { border-color:rgba(124,108,252,0.6); background:rgba(124,108,252,0.18); color:#b8afff; }
+  .pill:hover { border-color:var(--accent); }
+
+  .field-only, .grid-only { transition:opacity 0.2s; }
+  .field-only.hidden-ctrl, .grid-only.hidden-ctrl { opacity:0.25; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<div id="sketch-container"></div>
+
+<div id="header">
+  <h1>3d geometries</h1>
+  <span id="status">● live</span>
+</div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <!-- DISPLAY MODE -->
+  <div class="section">
+    <div class="section-label">display mode</div>
+    <div class="ctrl">
+      <label>mode</label>
+      <select id="displayMode">
+        <option value="grid">grid — shapes in a row</option>
+        <option value="field">field — one shape fills screen</option>
+        <option value="all">all shapes — screensaver mix</option>
+      </select>
+    </div>
+    <div class="ctrl field-only" id="fieldShapeCtrl">
+      <label>shape (field mode)</label>
+      <select id="fieldShape">
+        <option value="torus">torus</option>
+        <option value="box">box</option>
+        <option value="sphere">sphere</option>
+        <option value="cylinder">cylinder</option>
+        <option value="cone">cone</option>
+        <option value="plane">plane</option>
+        <option value="ellipsoid">ellipsoid</option>
+      </select>
+    </div>
+    <div class="ctrl field-only">
+      <label>instance count</label>
+      <div class="ctrl-row"><input type="range" id="fieldCount" min="3" max="60" value="18" step="1"><span class="val" id="fieldCountV">18</span></div>
+    </div>
+    <div class="ctrl field-only">
+      <label>drift speed</label>
+      <div class="ctrl-row"><input type="range" id="driftSpeed" min="0.1" max="6" value="1.2" step="0.1"><span class="val" id="driftSpeedV">1.2</span></div>
+    </div>
+    <div class="ctrl field-only">
+      <label>drift direction °</label>
+      <div class="ctrl-row"><input type="range" id="driftDir" min="0" max="360" value="225" step="5"><span class="val" id="driftDirV">225</span></div>
+    </div>
+    <div class="ctrl field-only">
+      <label>depth spread</label>
+      <div class="ctrl-row"><input type="range" id="depthSpread" min="0" max="1000" value="400" step="10"><span class="val" id="depthSpreadV">400</span></div>
+    </div>
+    <div class="ctrl field-only">
+      <label>size variance</label>
+      <div class="ctrl-row"><input type="range" id="sizeVar" min="0" max="1.5" value="0.6" step="0.05"><span class="val" id="sizeVarV">0.60</span></div>
+    </div>
+    <div class="ctrl field-only">
+      <label>rotation variance</label>
+      <div class="ctrl-row"><input type="range" id="rotVar" min="0" max="1" value="0.6" step="0.05"><span class="val" id="rotVarV">0.60</span></div>
+    </div>
+  </div>
+
+  <!-- GRID SHAPES -->
+  <div class="section grid-only">
+    <div class="section-label">shapes (grid mode)</div>
+    <div class="shape-pills">
+      <span class="pill on" data-shape="plane">plane</span>
+      <span class="pill on" data-shape="box">box</span>
+      <span class="pill on" data-shape="cylinder">cylinder</span>
+      <span class="pill on" data-shape="cone">cone</span>
+      <span class="pill on" data-shape="torus">torus</span>
+      <span class="pill on" data-shape="sphere">sphere</span>
+      <span class="pill on" data-shape="ellipsoid">ellipsoid</span>
+    </div>
+  </div>
+
+  <!-- LAYOUT -->
+  <div class="section">
+    <div class="section-label">layout</div>
+    <div class="ctrl"><label>shape size</label>
+      <div class="ctrl-row"><input type="range" id="shapeSize" min="20" max="200" value="70" step="1"><span class="val" id="shapeSizeV">70</span></div>
+    </div>
+    <div class="ctrl grid-only"><label>grid spacing</label>
+      <div class="ctrl-row"><input type="range" id="gridSpacing" min="80" max="400" value="230" step="5"><span class="val" id="gridSpacingV">230</span></div>
+    </div>
+    <div class="ctrl"><label>camera z distance</label>
+      <div class="ctrl-row"><input type="range" id="camZ" min="200" max="2000" value="900" step="10"><span class="val" id="camZV">900</span></div>
+    </div>
+    <div class="ctrl grid-only"><label>camera tilt °</label>
+      <div class="ctrl-row"><input type="range" id="camTilt" min="-60" max="60" value="-20" step="1"><span class="val" id="camTiltV">-20</span></div>
+    </div>
+  </div>
+
+  <!-- ROTATION -->
+  <div class="section">
+    <div class="section-label">rotation</div>
+    <div class="ctrl"><label>rotation speed</label>
+      <div class="ctrl-row"><input type="range" id="rotSpeed" min="0" max="3" value="0.25" step="0.05"><span class="val" id="rotSpeedV">0.25</span></div>
+    </div>
+    <div class="ctrl"><label>spin axis tilt °</label>
+      <div class="ctrl-row"><input type="range" id="spinTilt" min="0" max="90" value="25" step="1"><span class="val" id="spinTiltV">25</span></div>
+    </div>
+    <div class="ctrl grid-only"><label>phase offset (per shape)</label>
+      <div class="ctrl-row"><input type="range" id="phaseOffset" min="0" max="1" value="0.22" step="0.01"><span class="val" id="phaseOffsetV">0.22</span></div>
+    </div>
+  </div>
+
+  <!-- COLOR -->
+  <div class="section">
+    <div class="section-label">color</div>
+    <div class="ctrl"><label>color mode</label>
+      <select id="colorMode">
+        <option value="palette">palette — per-shape hue</option>
+        <option value="angle">angle — driven by rotation</option>
+        <option value="mono">mono — single hue</option>
+        <option value="rainbow">rainbow — full hsl sweep</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>hue offset °</label>
+      <div class="ctrl-row"><input type="range" id="hOffset" min="0" max="360" value="200" step="5"><span class="val" id="hOffsetV">200</span></div>
+    </div>
+    <div class="ctrl"><label>hue spread °</label>
+      <div class="ctrl-row"><input type="range" id="hSpread" min="10" max="360" value="260" step="5"><span class="val" id="hSpreadV">260</span></div>
+    </div>
+    <div class="ctrl"><label>saturation %</label>
+      <div class="ctrl-row"><input type="range" id="sat" min="0" max="100" value="72" step="1"><span class="val" id="satV">72</span></div>
+    </div>
+    <div class="ctrl"><label>lightness %</label>
+      <div class="ctrl-row"><input type="range" id="lit" min="20" max="85" value="60" step="1"><span class="val" id="litV">60</span></div>
+    </div>
+  </div>
+
+  <!-- MATERIAL -->
+  <div class="section">
+    <div class="section-label">material</div>
+    <div class="ctrl"><label>fill mode</label>
+      <select id="fillMode">
+        <option value="normal">normal material</option>
+        <option value="phong">phong (lit)</option>
+        <option value="wireframe">wireframe</option>
+        <option value="fill+wire">fill + wireframe</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>shininess</label>
+      <div class="ctrl-row"><input type="range" id="shininess" min="1" max="200" value="60" step="1"><span class="val" id="shininessV">60</span></div>
+    </div>
+    <div class="ctrl"><label>stroke weight</label>
+      <div class="ctrl-row"><input type="range" id="strokeW" min="0.2" max="4" value="0.8" step="0.1"><span class="val" id="strokeWV">0.8</span></div>
+    </div>
+    <div class="ctrl"><label>stroke opacity %</label>
+      <div class="ctrl-row"><input type="range" id="strokeOpa" min="0" max="100" value="35" step="1"><span class="val" id="strokeOpaV">35</span></div>
+    </div>
+  </div>
+
+  <!-- LIGHTING -->
+  <div class="section">
+    <div class="section-label">lighting</div>
+    <div class="ctrl"><label>ambient %</label>
+      <div class="ctrl-row"><input type="range" id="ambientL" min="0" max="100" value="40" step="1"><span class="val" id="ambientLV">40</span></div>
+    </div>
+    <div class="ctrl"><label>directional %</label>
+      <div class="ctrl-row"><input type="range" id="dirL" min="0" max="100" value="70" step="1"><span class="val" id="dirLV">70</span></div>
+    </div>
+    <div class="ctrl"><label>light orbit speed</label>
+      <div class="ctrl-row"><input type="range" id="lightSpeed" min="0" max="2" value="0.4" step="0.05"><span class="val" id="lightSpeedV">0.40</span></div>
+    </div>
+  </div>
+
+  <!-- SHAPE PARAMS -->
+  <div class="section">
+    <div class="section-label">shape params</div>
+    <div class="ctrl"><label>sphere detail</label>
+      <div class="ctrl-row"><input type="range" id="sphereDetail" min="4" max="48" value="24" step="1"><span class="val" id="sphereDetailV">24</span></div>
+    </div>
+    <div class="ctrl"><label>torus tube ratio</label>
+      <div class="ctrl-row"><input type="range" id="torusRatio" min="0.05" max="0.6" value="0.28" step="0.01"><span class="val" id="torusRatioV">0.28</span></div>
+    </div>
+    <div class="ctrl"><label>cylinder sides</label>
+      <div class="ctrl-row"><input type="range" id="cylSides" min="3" max="32" value="16" step="1"><span class="val" id="cylSidesV">16</span></div>
+    </div>
+    <div class="ctrl"><label>ellipsoid y scale</label>
+      <div class="ctrl-row"><input type="range" id="ellipY" min="0.3" max="2.5" value="1.5" step="0.05"><span class="val" id="ellipYV">1.50</span></div>
+    </div>
+    <div class="ctrl"><label>ellipsoid z scale</label>
+      <div class="ctrl-row"><input type="range" id="ellipZ" min="0.3" max="2.5" value="0.6" step="0.05"><span class="val" id="ellipZV">0.60</span></div>
+    </div>
+  </div>
+
+  <!-- BACKGROUND -->
+  <div class="section">
+    <div class="section-label">background</div>
+    <div class="ctrl"><label>bg color</label>
+      <div class="ctrl-row">
+        <input type="color" id="bgColor" value="#0a0a0c" style="width:36px;height:24px;border:1px solid var(--border2);border-radius:5px;background:none;cursor:pointer;padding:2px;">
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">canvas background</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="actions">
+    <div class="btn-row">
+      <button id="pauseBtn" class="primary">pause<kbd>space</kbd></button>
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+    </div>
+    <div class="btn-row">
+      <button class="export-btn" id="exportBtn">export PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── slider param helper ───────────────────────────────────────────────────────
+function pv(id) {
+  const el = document.getElementById(id);
+  const dsp = document.getElementById(id + 'V');
+  if (dsp) {
+    const fmt = v => (v % 1 !== 0 && parseFloat(el.step) < 1) ? parseFloat(v).toFixed(2) : v;
+    dsp.textContent = fmt(el.value);
+    el.addEventListener('input', () => { dsp.textContent = fmt(el.value); });
+  }
+  return () => parseFloat(el.value);
+}
+
+const getSize         = pv('shapeSize');
+const getSpacing      = pv('gridSpacing');
+const getCamZ         = pv('camZ');
+const getCamTilt      = pv('camTilt');
+const getRotSpeed     = pv('rotSpeed');
+const getSpinTilt     = pv('spinTilt');
+const getPhaseOffset  = pv('phaseOffset');
+const getHOffset      = pv('hOffset');
+const getHSpread      = pv('hSpread');
+const getSat          = pv('sat');
+const getLit          = pv('lit');
+const getShininess    = pv('shininess');
+const getStrokeW      = pv('strokeW');
+const getStrokeOpa    = pv('strokeOpa');
+const getAmbientL     = pv('ambientL');
+const getDirL         = pv('dirL');
+const getLightSpeed   = pv('lightSpeed');
+const getSphereDetail = pv('sphereDetail');
+const getTorusRatio   = pv('torusRatio');
+const getCylSides     = pv('cylSides');
+const getEllipY       = pv('ellipY');
+const getEllipZ       = pv('ellipZ');
+const getFieldCount   = pv('fieldCount');
+const getDriftSpeed   = pv('driftSpeed');
+const getDriftDir     = pv('driftDir');
+const getDepthSpread  = pv('depthSpread');
+const getSizeVar      = pv('sizeVar');
+const getRotVar       = pv('rotVar');
+
+const ALL_SHAPES = ['plane','box','cylinder','cone','torus','sphere','ellipsoid'];
+
+// ── field particles (declared early so rebuildField can reference it) ─────────
+let fieldParticles = [];
+
+// ── grid shape toggles ────────────────────────────────────────────────────────
+const shapeVisible = { plane:true, box:true, cylinder:true, cone:true, torus:true, sphere:true, ellipsoid:true };
+document.querySelectorAll('.pill[data-shape]').forEach(pill => {
+  pill.addEventListener('click', () => {
+    const s = pill.dataset.shape;
+    shapeVisible[s] = !shapeVisible[s];
+    pill.classList.toggle('on', shapeVisible[s]);
+  });
+});
+
+// ── display mode UI ───────────────────────────────────────────────────────────
+function applyModeUI() {
+  const mode = document.getElementById('displayMode').value;
+  const isField = mode !== 'grid';
+  document.querySelectorAll('.field-only').forEach(el => el.classList.toggle('hidden-ctrl', !isField));
+  document.querySelectorAll('.grid-only').forEach(el  => el.classList.toggle('hidden-ctrl',  mode !== 'grid'));
+  // hide per-shape picker in "all" mode
+  const fsc = document.getElementById('fieldShapeCtrl');
+  if (fsc) fsc.classList.toggle('hidden-ctrl', mode === 'all');
+  rebuildField();
+}
+document.getElementById('displayMode').addEventListener('change', applyModeUI);
+document.getElementById('fieldShape').addEventListener('change', rebuildField);
+document.getElementById('fieldCount').addEventListener('input', rebuildField);
+applyModeUI();
+
+// ── panel / pause / fullscreen ────────────────────────────────────────────────
+document.getElementById('toggle-panel').onclick = () =>
+  document.getElementById('panel').classList.toggle('hidden');
+
+let paused = false;
+const pauseBtn = document.getElementById('pauseBtn');
+const statusEl = document.getElementById('status');
+pauseBtn.onclick = () => {
+  paused = !paused;
+  pauseBtn.innerHTML = (paused ? 'resume' : 'pause') + '<kbd>space</kbd>';
+  pauseBtn.classList.toggle('active', paused);
+  statusEl.textContent = paused ? '⏸ paused' : '● live';
+};
+
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+fullscreenBtn.onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+document.addEventListener('fullscreenchange', () => {
+  fullscreenBtn.innerHTML = (document.fullscreenElement ? 'exit fullscreen' : 'fullscreen') + '<kbd>f</kbd>';
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { e.preventDefault(); pauseBtn.click(); }
+  if (e.code === 'KeyF')  { e.preventDefault(); fullscreenBtn.click(); }
+});
+
+// ── field particles ───────────────────────────────────────────────────────────
+// Each particle: { x, y, z, rotX, rotY, rotZ, drotX, drotY, drotZ, sizeMult, shape, colorIdx }
+
+function rs() { return Math.random() * 2 - 1; } // random signed
+
+function makeParticle(colorIdx, total, shape, W, H, startOffscreen) {
+  const dirRad  = getDriftDir() * Math.PI / 180;
+  const perpRad = dirRad + Math.PI / 2;
+  const maxDim  = Math.max(W, H);
+  const rotV    = getRotVar();
+
+  let px, py;
+  if (startOffscreen) {
+    // spawn fully behind the leading edge so they enter naturally
+    const along  = -(maxDim * 0.6 + Math.random() * maxDim * 0.8);
+    const across = rs() * maxDim * 0.9;
+    px = Math.cos(perpRad) * across + Math.cos(dirRad) * along;
+    py = Math.sin(perpRad) * across + Math.sin(dirRad) * along;
+  } else {
+    // on initial fill, scatter across the whole visible area
+    px = rs() * W * 0.6;
+    py = rs() * H * 0.6;
+  }
+
+  return {
+    x: px, y: py,
+    z: rs() * getDepthSpread(),
+    rotX: Math.random() * Math.PI * 2,
+    rotY: Math.random() * Math.PI * 2,
+    rotZ: Math.random() * Math.PI * 2,
+    drotX: (0.004 + Math.random() * 0.014 * rotV) * (Math.random() < 0.5 ? 1 : -1),
+    drotY: (0.004 + Math.random() * 0.014 * rotV) * (Math.random() < 0.5 ? 1 : -1),
+    drotZ: (0.001 + Math.random() * 0.006 * rotV) * (Math.random() < 0.5 ? 1 : -1),
+    sizeMult: 0.45 + Math.random() * getSizeVar(),
+    shape: shape,
+    colorIdx: colorIdx / Math.max(1, total - 1),
+  };
+}
+
+function rebuildField() {
+  const mode = document.getElementById('displayMode').value;
+  if (mode === 'grid') { fieldParticles = []; return; }
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const count = getFieldCount() | 0;
+  fieldParticles = [];
+
+  if (mode === 'field') {
+    const shape = document.getElementById('fieldShape').value;
+    for (let i = 0; i < count; i++) {
+      fieldParticles.push(makeParticle(i, count, shape, W, H, false));
+    }
+  } else { // all shapes
+    const perShape = Math.max(2, Math.round(count / ALL_SHAPES.length));
+    const total    = perShape * ALL_SHAPES.length;
+    ALL_SHAPES.forEach((shape, si) => {
+      for (let i = 0; i < perShape; i++) {
+        fieldParticles.push(makeParticle(si * perShape + i, total, shape, W, H, false));
+      }
+    });
+  }
+}
+
+function respawnParticle(p, W, H) {
+  const mode   = document.getElementById('displayMode').value;
+  const shape  = mode === 'all'
+    ? ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)]
+    : document.getElementById('fieldShape').value;
+  const tmp = makeParticle(Math.random(), 1, shape, W, H, true);
+  Object.assign(p, tmp);
+}
+
+// ── p5 sketch ─────────────────────────────────────────────────────────────────
+new p5(sk => {
+  let t = 0;
+  let exportPending = false;
+
+  sk.setup = () => {
+    const cnv = sk.createCanvas(window.innerWidth, window.innerHeight, sk.WEBGL);
+    cnv.parent('sketch-container');
+    sk.colorMode(sk.HSL, 360, 100, 100, 100);
+    sk.smooth();
+    window.addEventListener('resize', () => {
+      sk.resizeCanvas(window.innerWidth, window.innerHeight);
+      rebuildField();
+    });
+  };
+
+  sk.draw = () => {
+    if (paused) return;
+
+    const bg = hexToRgb(document.getElementById('bgColor').value);
+    sk.background(bg[0], bg[1], bg[2]);
+
+    // lighting
+    const aLv = getAmbientL();
+    const dLv = getDirL();
+    const la  = t * getLightSpeed() * 0.01;
+    sk.ambientLight(aLv * 2.55, aLv * 2.55, aLv * 2.55);
+    sk.directionalLight(dLv*2.55, dLv*2.55, dLv*2.55,  Math.cos(la), -0.6,  Math.sin(la));
+    sk.directionalLight(dLv*0.7,  dLv*0.7,  dLv*1.1,  -Math.cos(la),  0.4, -Math.sin(la));
+
+    const mode      = document.getElementById('displayMode').value;
+    const fillMode  = document.getElementById('fillMode').value;
+    const colorMode = document.getElementById('colorMode').value;
+    const shine     = getShininess();
+    const strokeA   = getStrokeOpa();
+    const strokeWt  = getStrokeW();
+    const baseH     = getHOffset();
+    const spread    = getHSpread();
+    const sat       = getSat();
+    const lit       = getLit();
+    const sz        = getSize();
+    const detail    = getSphereDetail() | 0;
+    const cylS      = getCylSides() | 0;
+    const tRatio    = getTorusRatio();
+    const eY        = getEllipY();
+    const eZ        = getEllipZ();
+    const rotSpd    = getRotSpeed() * 0.01;
+    const spinTiltR = getSpinTilt() * Math.PI / 180;
+
+    // ── GRID MODE ─────────────────────────────────────────────────────────────
+    if (mode === 'grid') {
+      const camZ = getCamZ();
+      const tilt = getCamTilt() * Math.PI / 180;
+      sk.camera(0, Math.sin(tilt)*camZ, Math.cos(tilt)*camZ, 0, 0, 0, 0, 1, 0);
+
+      const visible   = ALL_SHAPES.filter(s => shapeVisible[s]);
+      if (visible.length === 0) { t++; return; }
+      const spacing   = getSpacing();
+      const totalW    = (visible.length - 1) * spacing;
+      const phaseOff  = getPhaseOffset();
+
+      visible.forEach((shape, i) => {
+        const x     = -totalW / 2 + i * spacing;
+        const phase = i * phaseOff * Math.PI * 2;
+        const angle = t * rotSpd * 60 + phase;
+        const h     = colorFor(colorMode, baseH, spread, i, visible.length - 1, angle, t);
+
+        sk.push();
+        sk.translate(x, 0, 0);
+        sk.rotateX(spinTiltR); sk.rotateY(angle); sk.rotateX(-spinTiltR);
+        setMat(sk, fillMode, h, sat, lit, shine, strokeA, strokeWt);
+        drawShape(sk, shape, sz, detail, cylS, tRatio, eY, eZ);
+        sk.pop();
+      });
+
+    // ── FIELD / ALL MODE ──────────────────────────────────────────────────────
+    } else {
+      sk.camera(0, 0, getCamZ(), 0, 0, 0, 0, 1, 0);
+
+      const dirRad = getDriftDir() * Math.PI / 180;
+      const spd    = getDriftSpeed();
+      const dx     = Math.cos(dirRad) * spd;
+      const dy     = Math.sin(dirRad) * spd;
+      const W      = sk.width;
+      const H      = sk.height;
+      const limit  = Math.max(W, H) * 0.9;
+
+      fieldParticles.forEach((p, i) => {
+        // drift
+        p.x += dx;
+        p.y += dy;
+
+        // check if past the far edge in drift direction
+        const dot = p.x * Math.cos(dirRad) + p.y * Math.sin(dirRad);
+        if (dot > limit) respawnParticle(p, W, H);
+
+        // spin
+        const rMult = 1 + rotSpd * 4;
+        p.rotX += p.drotX * rMult;
+        p.rotY += p.drotY * rMult;
+        p.rotZ += p.drotZ * rMult;
+
+        const psz = sz * p.sizeMult;
+        const h   = colorFor(colorMode, baseH, spread, i, fieldParticles.length - 1, p.rotY, t);
+
+        sk.push();
+        sk.translate(p.x, p.y, p.z);
+        sk.rotateX(p.rotX);
+        sk.rotateY(p.rotY);
+        sk.rotateZ(p.rotZ);
+        setMat(sk, fillMode, h, sat, lit, shine, strokeA, strokeWt);
+        drawShape(sk, p.shape, psz, detail, cylS, tRatio, eY, eZ);
+        sk.pop();
+      });
+    }
+
+    t++;
+
+    if (exportPending) {
+      const link = document.createElement('a');
+      link.download = `3d_geometries_${Date.now()}.png`;
+      link.href = document.querySelector('#sketch-container canvas').toDataURL('image/png');
+      link.click();
+      exportPending = false;
+    }
+  };
+
+  document.getElementById('exportBtn').onclick = () => { exportPending = true; };
+
+}, document.getElementById('sketch-container'));
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function colorFor(mode, baseH, spread, i, total, angle, t) {
+  if (mode === 'palette') return (baseH + (i / Math.max(1, total)) * spread) % 360;
+  if (mode === 'angle')   return (baseH + ((angle % (Math.PI*2)+Math.PI*2) % (Math.PI*2)) / (Math.PI*2) * spread) % 360;
+  if (mode === 'mono')    return baseH;
+  /* rainbow */           return (baseH + t * 0.15 + i * 37) % 360;
+}
+
+function setMat(sk, fillMode, h, s, l, shine, strokeA, strokeWt) {
+  if (fillMode === 'phong') {
+    sk.specularMaterial(h, s, l); sk.shininess(shine); sk.noStroke();
+  } else if (fillMode === 'wireframe') {
+    sk.noFill(); sk.stroke(h, s, l * 0.85, strokeA); sk.strokeWeight(strokeWt);
+  } else if (fillMode === 'fill+wire') {
+    sk.fill(h, s, l); sk.stroke(h, s, l * 0.4, strokeA); sk.strokeWeight(strokeWt);
+  } else {
+    sk.normalMaterial(); sk.noStroke();
+  }
+}
+
+function drawShape(sk, shape, sz, detail, cylS, tRatio, eY, eZ) {
+  switch (shape) {
+    case 'plane':     sk.plane(sz, sz); break;
+    case 'box':       sk.box(sz * 0.9); break;
+    case 'cylinder':  sk.cylinder(sz * 0.45, sz, cylS, 1); break;
+    case 'cone':      sk.cone(sz * 0.45, sz, cylS); break;
+    case 'torus':     sk.torus(sz * 0.5, sz * tRatio, detail, 6); break;
+    case 'sphere':    sk.sphere(sz * 0.55, detail, detail); break;
+    case 'ellipsoid': sk.ellipsoid(sz * 0.5, sz * 0.5 * eY, sz * 0.5 * eZ, detail, detail); break;
+  }
+}
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+</script>
+</body>
+</html>
