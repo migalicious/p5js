@@ -1,115 +1,453 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>l-system tree</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-canvas{display:block;border-radius:8px;width:100%;height:auto}
-.controls{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0;font-family:var(--font-sans);font-size:13px;color:var(--color-text-secondary)}
-.ctrl{display:flex;flex-direction:column;gap:3px;min-width:110px}
-label{font-size:11px;color:var(--color-text-tertiary)}
-input[type=range]{width:100%;accent-color:var(--color-text-info,#3b82f6)}
-button{padding:5px 12px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px;cursor:pointer}
-button:hover{background:var(--color-background-tertiary)}
-.badge{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);align-self:flex-start}
-select{padding:3px 6px;border-radius:5px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0c;
+    --surface:   rgba(13, 13, 20, 0.92);
+    --surface2:  #1c1c24;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8e8f0;
+    --text-muted:#7a7a90;
+    --text-dim:  #44445a;
+    --accent:    #7c6cfc;
+    --radius:    10px;
+    --font-ui:   'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --panel-w:   300px;
+    /* kept for existing render logic */
+    --color-background-primary: #0a0a0c;
+    --color-text-primary: #e8e8f0;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  #c {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+
+  #header {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 999px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  #header h1 {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    color: var(--text-muted);
+  }
+
+  #status, #dim-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  #toggle-panel {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, background 0.15s;
+    color: var(--text-muted);
+  }
+  #toggle-panel:hover { border-color: var(--accent); background: rgba(124,108,252,0.15); color: var(--text); }
+  #toggle-panel svg { pointer-events: none; }
+
+  #panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: var(--panel-w);
+    height: 100%;
+    background: var(--surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-left: 1px solid var(--border2);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transform: translateX(0);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #panel.hidden { transform: translateX(100%); }
+  #panel::-webkit-scrollbar { width: 4px; }
+  #panel::-webkit-scrollbar-track { background: transparent; }
+  #panel::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
+  .panel-header {
+    padding: 60px 16px 12px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .ctrl { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl label {
+    font-size: 10px; letter-spacing: 0.07em;
+    color: var(--text-muted); font-family: var(--font-mono);
+  }
+  .ctrl-row { display: flex; align-items: center; gap: 8px; }
+
+  input[type=range] {
+    flex: 1; height: 3px;
+    -webkit-appearance: none; appearance: none;
+    background: var(--surface2); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--text); border: none; cursor: pointer;
+    transition: background 0.15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { background: var(--accent); }
+  input[type=range]::-moz-range-thumb { width:12px;height:12px;border-radius:50%;background:var(--text);border:none;cursor:pointer; }
+
+  .val {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); min-width: 30px; text-align: right;
+  }
+
+  select {
+    width: 100%; padding: 5px 28px 5px 8px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 6px; color: var(--text); font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.05em; cursor: pointer; outline: none;
+    -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7a90' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+  }
+  select:focus { border-color: var(--accent); }
+
+  .actions { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .btn-row { display: flex; gap: 6px; }
+
+  button {
+    flex: 1; padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--border2); background: var(--surface2); color: var(--text);
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s; text-transform: lowercase;
+  }
+  button:hover { border-color: var(--accent); background: rgba(124,108,252,0.12); }
+  button.primary { background: rgba(124,108,252,0.18); border-color: rgba(124,108,252,0.4); color: #b8afff; }
+  button.primary:hover { background: rgba(124,108,252,0.28); border-color: var(--accent); }
+  button.export-btn { background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3); color: #7dd3fc; }
+  button.export-btn:hover { background: rgba(56,189,248,0.22); border-color: rgba(56,189,248,0.6); }
+
+  kbd {
+    display: inline-block; font-family: var(--font-mono); font-size: 9px;
+    padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border2); color: var(--text-dim); margin-left: 3px;
+  }
 </style>
+</head>
+<body>
+
 <canvas id="c"></canvas>
-<div class="controls">
-  <div class="ctrl">
-    <label>preset</label>
-    <select id="preset">
-      <option value="tree">tree</option>
-      <option value="fern">fern</option>
-      <option value="coral">coral</option>
-      <option value="snowflake">snowflake (Koch)</option>
-    </select>
-  </div>
-  <div class="ctrl"><label>iterations</label><input type="range" id="iters" min="1" max="7" value="5" step="1"><span class="badge" id="itersV">5</span></div>
-  <div class="ctrl"><label>branch angle °</label><input type="range" id="angle" min="5" max="60" value="25" step="1"><span class="badge" id="angleV">25</span></div>
-  <div class="ctrl"><label>length ratio</label><input type="range" id="ratio" min="50" max="85" value="68" step="1"><span class="badge" id="ratioV">68</span></div>
-  <div class="ctrl"><label>randomness</label><input type="range" id="rand" min="0" max="30" value="8" step="1"><span class="badge" id="randV">8</span></div>
-  <div class="ctrl" style="justify-content:flex-end"><button id="redraw">redraw</button></div>
+
+<div id="header">
+  <h1>l-system tree</h1>
+  <span id="dim-badge"></span>
+  <span id="status">● ready</span>
 </div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <div class="section">
+    <div class="section-label">preset</div>
+    <div class="ctrl">
+      <label>structure</label>
+      <select id="preset">
+        <option value="tree">tree</option>
+        <option value="fern">fern</option>
+        <option value="coral">coral</option>
+        <option value="snowflake">snowflake (Koch)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">parameters</div>
+    <div class="ctrl"><label>iterations</label>
+      <div class="ctrl-row"><input type="range" id="iters" min="1" max="7" value="5" step="1"><span class="val" id="itersV">5</span></div>
+    </div>
+    <div class="ctrl"><label>branch angle °</label>
+      <div class="ctrl-row"><input type="range" id="angle" min="5" max="60" value="25" step="1"><span class="val" id="angleV">25</span></div>
+    </div>
+    <div class="ctrl"><label>length ratio %</label>
+      <div class="ctrl-row"><input type="range" id="ratio" min="50" max="85" value="68" step="1"><span class="val" id="ratioV">68</span></div>
+    </div>
+    <div class="ctrl"><label>randomness</label>
+      <div class="ctrl-row"><input type="range" id="rand" min="0" max="30" value="8" step="1"><span class="val" id="randV">8</span></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="btn-row">
+      <button class="primary" id="redrawBtn">redraw<kbd>r</kbd></button>
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+    </div>
+    <div class="section-label" style="padding-top:4px">export</div>
+    <div class="ctrl">
+      <label>format</label>
+      <select id="exportFmt">
+        <option value="image/png">png — lossless</option>
+        <option value="image/jpeg" selected>jpeg — smaller</option>
+        <option value="image/webp">webp — best ratio</option>
+      </select>
+    </div>
+    <div class="ctrl" id="qualityCtrl">
+      <label>quality % <span style="font-size:9px;color:var(--text-dim)">(jpeg/webp only)</span></label>
+      <div class="ctrl-row"><input type="range" id="exportQuality" min="60" max="100" value="93" step="1"><span class="val" id="exportQualityV">93</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="export-btn" id="exportBtn">save image ↓</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const canvas=document.getElementById('c');
-const ctx=canvas.getContext('2d');
-const W=640,H=420;
-canvas.width=W;canvas.height=H;
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const statusEl  = document.getElementById('status');
+const dimBadge  = document.getElementById('dim-badge');
 
-function param(id){
-  const el=document.getElementById(id),dsp=document.getElementById(id+'V');
-  if(dsp){dsp.textContent=el.value;el.addEventListener('input',()=>{dsp.textContent=el.value;render();});}
-  else el.addEventListener('change',()=>render());
-  return ()=>parseFloat(el.value);
+let W, H, DPR;
+
+function resizeCanvas() {
+  DPR = window.devicePixelRatio || 1;
+  W   = window.innerWidth;
+  H   = window.innerHeight;
+  canvas.width  = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(DPR, DPR);
+  dimBadge.textContent = `${canvas.width}×${canvas.height}`;
+  render();
 }
-const getIters=param('iters'),getAngle=param('angle'),getRatio=param('ratio'),getRand=param('rand');
-document.getElementById('preset').addEventListener('change',()=>{syncPreset();render();});
 
-const presets={
-  tree:{iters:5,angle:25,ratio:68,rand:8,axiom:'F',rules:{F:'F[+F]F[-F]F'}},
-  fern:{iters:5,angle:22,ratio:65,rand:3,axiom:'X',rules:{X:'F+[[X]-X]-F[-FX]+X',F:'FF'}},
-  coral:{iters:4,angle:28,ratio:70,rand:12,axiom:'F',rules:{F:'F[+F][-F]F[+F][-F]'}},
-  snowflake:{iters:4,angle:60,ratio:33,rand:0,axiom:'F++F++F',rules:{F:'F-F++F-F'}}
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resizeCanvas, 150); });
+
+// ── Params ──
+function param(id) {
+  const el  = document.getElementById(id);
+  const dsp = document.getElementById(id + 'V');
+  if (dsp) { dsp.textContent = el.value; el.addEventListener('input', () => { dsp.textContent = el.value; render(); }); }
+  else el.addEventListener('change', () => render());
+  return () => parseFloat(el.value);
+}
+
+const getIters = param('iters');
+const getAngle = param('angle');
+const getRatio = param('ratio');
+const getRand  = param('rand');
+
+document.getElementById('preset').addEventListener('change', () => { syncPreset(); render(); });
+
+// ── Presets ──
+const presets = {
+  tree:      { iters: 5, angle: 25, ratio: 68, rand: 8,  axiom: 'F',         rules: { F: 'F[+F]F[-F]F' } },
+  fern:      { iters: 5, angle: 22, ratio: 65, rand: 3,  axiom: 'X',         rules: { X: 'F+[[X]-X]-F[-FX]+X', F: 'FF' } },
+  coral:     { iters: 4, angle: 28, ratio: 70, rand: 12, axiom: 'F',         rules: { F: 'F[+F][-F]F[+F][-F]' } },
+  snowflake: { iters: 4, angle: 60, ratio: 33, rand: 0,  axiom: 'F++F++F',   rules: { F: 'F-F++F-F' } },
 };
 
-function syncPreset(){
-  const p=presets[document.getElementById('preset').value];
-  ['iters','angle','ratio','rand'].forEach(k=>{
-    const el=document.getElementById(k);
-    el.value=p[k];
-    document.getElementById(k+'V').textContent=p[k];
+function syncPreset() {
+  const p = presets[document.getElementById('preset').value];
+  ['iters','angle','ratio','rand'].forEach(k => {
+    const el = document.getElementById(k);
+    el.value = p[k];
+    document.getElementById(k + 'V').textContent = p[k];
   });
 }
 
-function expand(axiom,rules,n){
-  let s=axiom;
-  for(let i=0;i<n;i++){
-    let ns='';
-    for(const c of s) ns+=(rules[c]||c);
-    s=ns;
-    if(s.length>200000) break;
+// ── L-system expand ──
+function expand(axiom, rules, n) {
+  let s = axiom;
+  for (let i = 0; i < n; i++) {
+    let ns = '';
+    for (const c of s) ns += (rules[c] || c);
+    s = ns;
+    if (s.length > 200000) break;
   }
   return s;
 }
 
-function render(){
-  ctx.clearRect(0,0,W,H);
-  const bg=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  
-  const pname=document.getElementById('preset').value;
-  const preset=presets[pname];
-  const iters=getIters()|0, angle=getAngle()*Math.PI/180, ratio=getRatio()/100, randAmt=getRand()/100;
-  const str=expand(preset.axiom,preset.rules,iters);
-  
-  const baseLen=pname==='snowflake'?140:90;
-  let len=baseLen*Math.pow(ratio,iters-1);
-  
-  const stack=[];
-  let x=W/2, y=H-20, dir=-Math.PI/2;
-  if(pname==='snowflake'){x=100;y=H/2+80;dir=0;}
-  
-  const textColor=getComputedStyle(document.documentElement).getPropertyValue('--color-text-primary')||'#222';
-  ctx.strokeStyle=textColor;
-  ctx.lineWidth=Math.max(0.3,2.5*Math.pow(0.7,iters));
-  
-  for(const c of str){
-    if(c==='F'){
-      const rangle=dir+(Math.random()-0.5)*angle*randAmt*2;
-      const nx=x+Math.cos(rangle)*len, ny=y+Math.sin(rangle)*len;
-      ctx.globalAlpha=0.7+Math.random()*0.3;
-      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(nx,ny);ctx.stroke();
-      x=nx;y=ny;
-    } else if(c==='+') dir+=angle+(Math.random()-0.5)*angle*randAmt;
-    else if(c==='-') dir-=angle+(Math.random()-0.5)*angle*randAmt;
-    else if(c==='[') stack.push({x,y,dir,len,lw:ctx.lineWidth});
-    else if(c===']'){
-      const s=stack.pop();
-      x=s.x;y=s.y;dir=s.dir;len=s.len;
-      ctx.lineWidth=s.lw; ctx.globalAlpha=1;
+// ── Render ──
+function setStatus(txt) { statusEl.textContent = txt; }
+
+function render() {
+  setStatus('⟳ rendering');
+  requestAnimationFrame(() => {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(0, 0, W, H);
+
+    const pname  = document.getElementById('preset').value;
+    const preset = presets[pname];
+    const iters   = getIters() | 0;
+    const angle   = getAngle() * Math.PI / 180;
+    const ratio   = getRatio() / 100;
+    const randAmt = getRand() / 100;
+    const str     = expand(preset.axiom, preset.rules, iters);
+
+    // Scale base length to canvas size
+    const scale = Math.min(W, H) / 420;
+    const baseLen = (pname === 'snowflake' ? 140 : 90) * scale;
+    let len = baseLen * Math.pow(ratio, iters - 1);
+
+    const stack = [];
+    let x = W / 2, y = H - 20 * scale, dir = -Math.PI / 2;
+    if (pname === 'snowflake') { x = W * 0.15; y = H * 0.69; dir = 0; }
+
+    ctx.strokeStyle = '#e8e8f0';
+    ctx.lineWidth   = Math.max(0.3, 2.5 * Math.pow(0.7, iters));
+
+    for (const c of str) {
+      if (c === 'F') {
+        const rangle = dir + (Math.random() - 0.5) * angle * randAmt * 2;
+        const nx = x + Math.cos(rangle) * len;
+        const ny = y + Math.sin(rangle) * len;
+        ctx.globalAlpha = 0.7 + Math.random() * 0.3;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+        x = nx; y = ny;
+      } else if (c === '+') { dir += angle + (Math.random() - 0.5) * angle * randAmt; }
+      else if (c === '-')   { dir -= angle + (Math.random() - 0.5) * angle * randAmt; }
+      else if (c === '[')   { stack.push({x, y, dir, len, lw: ctx.lineWidth}); }
+      else if (c === ']') {
+        const s = stack.pop();
+        x = s.x; y = s.y; dir = s.dir; len = s.len;
+        ctx.lineWidth = s.lw; ctx.globalAlpha = 1;
+      }
+      if (stack.length > 0) ctx.lineWidth = Math.max(0.3, ctx.lineWidth * 0.97);
     }
-    else if(c==='X'){}
-    if(stack.length>0) ctx.lineWidth=Math.max(0.3,ctx.lineWidth*0.97);
-  }
+    ctx.globalAlpha = 1;
+    setStatus('● ready');
+  });
 }
 
-syncPreset();render();
-document.getElementById('redraw').onclick=render;
+// ── Controls ──
+document.getElementById('redrawBtn').onclick = render;
+
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+function updateFullscreenBtn() {
+  const isFs = !!document.fullscreenElement;
+  fullscreenBtn.innerHTML = (isFs ? 'exit fullscreen' : 'fullscreen') + '<kbd>f</kbd>';
+}
+fullscreenBtn.onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+document.addEventListener('fullscreenchange', updateFullscreenBtn);
+
+document.getElementById('toggle-panel').onclick = () => document.getElementById('panel').classList.toggle('hidden');
+
+// Export
+document.getElementById('exportFmt').addEventListener('change', function() {
+  document.getElementById('qualityCtrl').style.opacity = this.value === 'image/png' ? '0.35' : '1';
+});
+const exportQualityEl = document.getElementById('exportQuality');
+exportQualityEl.addEventListener('input', () => {
+  document.getElementById('exportQualityV').textContent = exportQualityEl.value;
+});
+document.getElementById('exportBtn').onclick = () => {
+  const fmt  = document.getElementById('exportFmt').value;
+  const qual = parseFloat(exportQualityEl.value) / 100;
+  const ext  = fmt === 'image/png' ? 'png' : fmt === 'image/jpeg' ? 'jpg' : 'webp';
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = `lsystem_tree_${canvas.width}x${canvas.height}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, fmt, qual);
+};
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'KeyR') { e.preventDefault(); render(); }
+  if (e.code === 'KeyF') { e.preventDefault(); fullscreenBtn.click(); }
+});
+
+// ── Init ──
+syncPreset();
+resizeCanvas();
 </script>
+</body>
+</html>

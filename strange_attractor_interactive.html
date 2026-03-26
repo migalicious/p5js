@@ -1,120 +1,606 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>strange attractors</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-canvas{display:block;border-radius:8px;width:100%;height:auto}
-.controls{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0;font-family:var(--font-sans);font-size:13px;color:var(--color-text-secondary)}
-.ctrl{display:flex;flex-direction:column;gap:3px;min-width:110px}
-label{font-size:11px;color:var(--color-text-tertiary)}
-input[type=range]{width:100%;accent-color:var(--color-text-info,#3b82f6)}
-select{padding:3px 6px;border-radius:5px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px}
-.badge{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);align-self:flex-start}
-button{padding:5px 12px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px;cursor:pointer}
-button:hover{background:var(--color-background-tertiary)}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0c;
+    --surface:   rgba(13, 13, 20, 0.92);
+    --surface2:  #1c1c24;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8e8f0;
+    --text-muted:#7a7a90;
+    --text-dim:  #44445a;
+    --accent:    #7c6cfc;
+    --radius:    10px;
+    --font-ui:   'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --panel-w:   300px;
+    /* kept for existing render logic */
+    --color-background-primary: #0a0a0c;
+    --color-text-primary: #e8e8f0;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  #c {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+
+  #header {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 999px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  #header h1 {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    color: var(--text-muted);
+  }
+
+  #status, #dim-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+
+  #toggle-panel {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, background 0.15s;
+    color: var(--text-muted);
+  }
+  #toggle-panel:hover { border-color: var(--accent); background: rgba(124,108,252,0.15); color: var(--text); }
+  #toggle-panel svg { pointer-events: none; }
+
+  #panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: var(--panel-w);
+    height: 100%;
+    background: var(--surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-left: 1px solid var(--border2);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transform: translateX(0);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #panel.hidden { transform: translateX(100%); }
+  #panel::-webkit-scrollbar { width: 4px; }
+  #panel::-webkit-scrollbar-track { background: transparent; }
+  #panel::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
+  .panel-header {
+    padding: 60px 16px 12px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .ctrl { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl label {
+    font-size: 10px; letter-spacing: 0.07em;
+    color: var(--text-muted); font-family: var(--font-mono);
+  }
+  .ctrl-row { display: flex; align-items: center; gap: 8px; }
+
+  input[type=range] {
+    flex: 1; height: 3px;
+    -webkit-appearance: none; appearance: none;
+    background: var(--surface2); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--text); border: none; cursor: pointer;
+    transition: background 0.15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { background: var(--accent); }
+  input[type=range]::-moz-range-thumb { width:12px;height:12px;border-radius:50%;background:var(--text);border:none;cursor:pointer; }
+
+  .val {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); min-width: 36px; text-align: right;
+  }
+
+  select {
+    width: 100%; padding: 5px 28px 5px 8px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 6px; color: var(--text); font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.05em; cursor: pointer; outline: none;
+    -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7a90' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+  }
+  select:focus { border-color: var(--accent); }
+
+  .actions { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .btn-row { display: flex; gap: 6px; }
+
+  button {
+    flex: 1; padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--border2); background: var(--surface2); color: var(--text);
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s; text-transform: lowercase;
+  }
+  button:hover { border-color: var(--accent); background: rgba(124,108,252,0.12); }
+  button.primary { background: rgba(124,108,252,0.18); border-color: rgba(124,108,252,0.4); color: #b8afff; }
+  button.primary:hover { background: rgba(124,108,252,0.28); border-color: var(--accent); }
+  button.export-btn { background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3); color: #7dd3fc; }
+  button.export-btn:hover { background: rgba(56,189,248,0.22); border-color: rgba(56,189,248,0.6); }
+
+  kbd {
+    display: inline-block; font-family: var(--font-mono); font-size: 9px;
+    padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border2); color: var(--text-dim); margin-left: 3px;
+  }
 </style>
+</head>
+<body>
+
 <canvas id="c"></canvas>
-<div class="controls">
-  <div class="ctrl">
-    <label>attractor type</label>
-    <select id="type">
-      <option value="clifford">Clifford</option>
-      <option value="dejong">De Jong</option>
-      <option value="lorenz">Lorenz (3D proj.)</option>
-    </select>
-  </div>
-  <div class="ctrl"><label>iterations (M)</label><input type="range" id="iters" min="0.5" max="5" value="2" step="0.5"><span class="badge" id="itersV">2M</span></div>
-  <div class="ctrl"><label>point size</label><input type="range" id="psize" min="0.5" max="3" value="1" step="0.5"><span class="badge" id="psizeV">1</span></div>
-  <div class="ctrl"><label>opacity</label><input type="range" id="opa" min="2" max="30" value="8" step="1"><span class="badge" id="opaV">8</span></div>
-  <div class="ctrl"><label>a</label><input type="range" id="pa" min="-3" max="3" value="-1.7" step="0.05"><span class="badge" id="paV">-1.7</span></div>
-  <div class="ctrl"><label>b</label><input type="range" id="pb" min="-3" max="3" value="1.8" step="0.05"><span class="badge" id="pbV">1.8</span></div>
-  <div class="ctrl"><label>c</label><input type="range" id="pc" min="-3" max="3" value="-1.9" step="0.05"><span class="badge" id="pcV">-1.9</span></div>
-  <div class="ctrl"><label>d</label><input type="range" id="pd" min="-3" max="3" value="0.4" step="0.05"><span class="badge" id="pdV">0.4</span></div>
-  <div class="ctrl" style="justify-content:flex-end"><button id="redraw">redraw</button><button id="rng">random params</button></div>
+
+<div id="header">
+  <h1>strange attractors</h1>
+  <span id="dim-badge"></span>
+  <span id="status">● ready</span>
 </div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <div class="section">
+    <div class="section-label">attractor</div>
+    <div class="ctrl">
+      <label>type</label>
+      <select id="type">
+        <option value="clifford">Clifford</option>
+        <option value="dejong">De Jong</option>
+        <option value="lorenz">Lorenz (3D proj.)</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>iterations (M)</label>
+      <div class="ctrl-row"><input type="range" id="iters" min="0.5" max="5" value="2" step="0.5"><span class="val" id="itersV">2M</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">parameters</div>
+    <div class="ctrl"><label>a</label>
+      <div class="ctrl-row"><input type="range" id="pa" min="-3" max="3" value="-1.7" step="0.05"><span class="val" id="paV">-1.7</span></div>
+    </div>
+    <div class="ctrl"><label>b</label>
+      <div class="ctrl-row"><input type="range" id="pb" min="-3" max="3" value="1.8" step="0.05"><span class="val" id="pbV">1.8</span></div>
+    </div>
+    <div class="ctrl"><label>c</label>
+      <div class="ctrl-row"><input type="range" id="pc" min="-3" max="3" value="-1.9" step="0.05"><span class="val" id="pcV">-1.9</span></div>
+    </div>
+    <div class="ctrl"><label>d</label>
+      <div class="ctrl-row"><input type="range" id="pd" min="-3" max="3" value="0.4" step="0.05"><span class="val" id="pdV">0.4</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">color</div>
+    <div class="ctrl">
+      <label>color source</label>
+      <select id="colorMode">
+        <option value="constant">constant — single hue</option>
+        <option value="position">position — x/y gradient</option>
+        <option value="iter">iteration — sequence age</option>
+        <option value="speed">speed — attractor velocity</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>palette</label>
+      <select id="palette">
+        <option value="neon">neon — full hsl sweep</option>
+        <option value="fire">fire — red to yellow</option>
+        <option value="ocean">ocean — teal to violet</option>
+        <option value="sunset">sunset — warm gradient</option>
+        <option value="mono">mono — gray + accent</option>
+        <option value="split">split complementary</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>hue range °</label>
+      <div class="ctrl-row"><input type="range" id="hRange" min="20" max="360" value="240" step="10"><span class="val" id="hRangeV">240</span></div>
+    </div>
+    <div class="ctrl"><label>hue offset °</label>
+      <div class="ctrl-row"><input type="range" id="hOffset" min="0" max="360" value="200" step="5"><span class="val" id="hOffsetV">200</span></div>
+    </div>
+    <div class="ctrl" id="gradAngleCtrl" style="display:none"><label>gradient direction °</label>
+      <div class="ctrl-row"><input type="range" id="gradAngle" min="0" max="360" value="45" step="5"><span class="val" id="gradAngleV">45</span></div>
+    </div>
+    <div class="ctrl"><label>saturation %</label>
+      <div class="ctrl-row"><input type="range" id="sat" min="20" max="100" value="80" step="5"><span class="val" id="satV">80</span></div>
+    </div>
+    <div class="ctrl"><label>lightness %</label>
+      <div class="ctrl-row"><input type="range" id="lit" min="20" max="80" value="55" step="5"><span class="val" id="litV">55</span></div>
+    </div>
+    <div class="ctrl" id="monoThreshCtrl" style="display:none"><label>accent threshold</label>
+      <div class="ctrl-row"><input type="range" id="monoThresh" min="0.05" max="1" value="0.3" step="0.05"><span class="val" id="monoThreshV">0.3</span></div>
+    </div>
+    <div class="ctrl" id="splitAngleCtrl" style="display:none"><label>split angle °</label>
+      <div class="ctrl-row"><input type="range" id="splitAngle" min="10" max="350" value="150" step="5"><span class="val" id="splitAngleV">150</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">display</div>
+    <div class="ctrl"><label>point size</label>
+      <div class="ctrl-row"><input type="range" id="psize" min="0.5" max="3" value="1" step="0.5"><span class="val" id="psizeV">1</span></div>
+    </div>
+    <div class="ctrl"><label>opacity %</label>
+      <div class="ctrl-row"><input type="range" id="opa" min="2" max="30" value="8" step="1"><span class="val" id="opaV">8</span></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="btn-row">
+      <button class="primary" id="redrawBtn">redraw<kbd>r</kbd></button>
+      <button id="rngBtn">randomize<kbd>n</kbd></button>
+    </div>
+    <div class="btn-row">
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+    </div>
+    <div class="section-label" style="padding-top:4px">export</div>
+    <div class="ctrl">
+      <label>format</label>
+      <select id="exportFmt">
+        <option value="image/png">png — lossless</option>
+        <option value="image/jpeg" selected>jpeg — smaller</option>
+        <option value="image/webp">webp — best ratio</option>
+      </select>
+    </div>
+    <div class="ctrl" id="qualityCtrl">
+      <label>quality % <span style="font-size:9px;color:var(--text-dim)">(jpeg/webp only)</span></label>
+      <div class="ctrl-row"><input type="range" id="exportQuality" min="60" max="100" value="93" step="1"><span class="val" id="exportQualityV">93</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="export-btn" id="exportBtn">save image ↓</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const canvas=document.getElementById('c');
-const ctx=canvas.getContext('2d');
-const W=640,H=420;
-canvas.width=W;canvas.height=H;
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const dimBadge = document.getElementById('dim-badge');
 
-function param(id,suffix){
-  const el=document.getElementById(id),dsp=document.getElementById(id+'V');
-  dsp.textContent=el.value+(suffix||'');
-  el.addEventListener('input',()=>{dsp.textContent=el.value+(suffix||'');render();});
-  return ()=>parseFloat(el.value);
-}
-const getIters=param('iters','M'),getPsize=param('psize'),getOpa=param('opa');
-const getA=param('pa'),getB=param('pb'),getC=param('pc'),getD=param('pd');
-document.getElementById('type').addEventListener('change',()=>render());
+let W, H, DPR;
 
-function clifford(x,y,a,b,c,d){
-  return [Math.sin(a*y)+c*Math.cos(a*x), Math.sin(b*x)+d*Math.cos(b*y)];
-}
-function dejong(x,y,a,b,c,d){
-  return [Math.sin(a*y)-Math.cos(b*x), Math.sin(c*x)-Math.cos(d*y)];
+function resizeCanvas() {
+  DPR = window.devicePixelRatio || 1;
+  W   = window.innerWidth;
+  H   = window.innerHeight;
+  canvas.width  = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(DPR, DPR);
+  dimBadge.textContent = `${canvas.width}×${canvas.height}`;
+  scheduleRender();
 }
 
-function render(){
-  ctx.clearRect(0,0,W,H);
-  const bg=getComputedStyle(document.documentElement).getPropertyValue('--color-background-primary')||'#fff';
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  
-  const type=document.getElementById('type').value;
-  const n=getIters()*1000000|0;
-  const a=getA(),b=getB(),c=getC(),d=getD();
-  const opa=getOpa()/100, psize=getPsize();
-  
-  ctx.globalAlpha=opa;
-  const textColor=getComputedStyle(document.documentElement).getPropertyValue('--color-text-primary')||'#111';
-  ctx.fillStyle=textColor;
-  
-  let x=0.1,y=0.1,z=0.1;
-  const pts=[];
-  
-  if(type==='lorenz'){
-    const dt=0.005,sigma=a*3+10,rho=b*14+28,beta=c*0.5+2.67;
-    let lx=0.1,ly=0,lz=0,minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
-    const tmp=[];
-    for(let i=0;i<Math.min(n,500000);i++){
-      const dx=sigma*(ly-lx),dy=lx*(rho-lz)-ly,dz=lx*ly-beta*lz;
-      lx+=dx*dt;ly+=dy*dt;lz+=dz*dt;
-      tmp.push([lx,lz]);
-      if(lx<minX)minX=lx;if(lx>maxX)maxX=lx;if(lz<minZ)minZ=lz;if(lz>maxZ)maxZ=lz;
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resizeCanvas, 300); });
+
+// ── Params ──
+function param(id, suffix) {
+  const el  = document.getElementById(id);
+  const dsp = document.getElementById(id + 'V');
+  dsp.textContent = el.value + (suffix || '');
+  el.addEventListener('input', () => { dsp.textContent = el.value + (suffix || ''); scheduleRender(); });
+  return () => parseFloat(el.value);
+}
+
+const getIters = param('iters', 'M');
+const getPsize = param('psize');
+const getOpa   = param('opa');
+const getA     = param('pa');
+const getB     = param('pb');
+const getC     = param('pc');
+const getD     = param('pd');
+
+const getHRange     = param('hRange');
+const getHOffset    = param('hOffset');
+const getSat        = param('sat');
+const getLit        = param('lit');
+const getGradAngle  = param('gradAngle');
+const getMonoThresh = param('monoThresh');
+const getSplitAngle = param('splitAngle');
+
+document.getElementById('type').addEventListener('change', scheduleRender);
+document.getElementById('colorMode').addEventListener('change', () => { updateColorControls(); scheduleRender(); });
+document.getElementById('palette').addEventListener('change',   () => { updateColorControls(); scheduleRender(); });
+
+// ── Color utilities ──
+function tToColor(t, opa) {
+  const pal  = document.getElementById('palette').value;
+  const hOff = getHOffset(), hRng = getHRange(), sat = getSat(), lit = getLit();
+  let h, s = sat, l = lit;
+  switch (pal) {
+    case 'neon':
+      h = (hOff + t * hRng) % 360; break;
+    case 'fire':
+      h = (hOff + t * Math.min(hRng, 90)) % 360; l = lit + t * 20; break;
+    case 'ocean':
+      h = (200 + (hOff % 60) + t * Math.min(hRng, 120)) % 360; break;
+    case 'sunset': {
+      const stops = [[15,90,55],[35,85,60],[55,70,55],[275,60,45]];
+      const i = Math.min(3, t*4|0), f = t*4 - i;
+      const A = stops[i], B = stops[Math.min(3,i+1)];
+      h = A[0]+(B[0]-A[0])*f; s = A[1]; l = A[2]; break;
     }
-    const rx=maxX-minX||1,rz=maxZ-minZ||1;
-    const pad=40;
-    for(const [px,pz] of tmp){
-      const sx=pad+(px-minX)/rx*(W-pad*2), sy=pad+(pz-minZ)/rz*(H-pad*2);
-      ctx.fillRect(sx-psize/2,sy-psize/2,psize,psize);
-    }
-    ctx.globalAlpha=1; return;
+    case 'mono':
+      return t > getMonoThresh()
+        ? `hsla(${hOff},${sat}%,${lit}%,${opa})`
+        : `hsla(0,0%,${20+t*60}%,${opa})`;
+    case 'split':
+      h = (t < 0.5 ? hOff : (hOff + getSplitAngle() + t * hRng * 0.5)) % 360; break;
+    default:
+      h = (hOff + t * hRng) % 360;
   }
-  
-  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-  const coords=[];
-  for(let i=0;i<n;i++){
-    const [nx,ny]=type==='clifford'?clifford(x,y,a,b,c,d):dejong(x,y,a,b,c,d);
-    x=nx;y=ny;
-    if(i>1000){
-      coords.push([x,y]);
-      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
-    }
-  }
-  const rx=maxX-minX||1,ry=maxY-minY||1;
-  const pad=40;
-  for(const [px,py] of coords){
-    const sx=pad+(px-minX)/rx*(W-pad*2), sy=pad+(py-minY)/ry*(H-pad*2);
-    ctx.fillRect(sx-psize/2,sy-psize/2,psize,psize);
-  }
-  ctx.globalAlpha=1;
+  return `hsla(${h},${s}%,${l}%,${opa})`;
 }
 
-document.getElementById('redraw').onclick=render;
-document.getElementById('rng').onclick=()=>{
-  ['pa','pb','pc','pd'].forEach(id=>{
-    const el=document.getElementById(id),v=(Math.random()*6-3).toFixed(2);
-    el.value=v;document.getElementById(id+'V').textContent=v;
+function updateColorControls() {
+  const mode = document.getElementById('colorMode').value;
+  const pal  = document.getElementById('palette').value;
+  document.getElementById('gradAngleCtrl').style.display  = mode === 'position' ? '' : 'none';
+  document.getElementById('monoThreshCtrl').style.display = pal  === 'mono'     ? '' : 'none';
+  document.getElementById('splitAngleCtrl').style.display = pal  === 'split'    ? '' : 'none';
+}
+
+// ── Attractor functions ──
+function clifford(x, y, a, b, c, d) {
+  return [Math.sin(a*y) + c*Math.cos(a*x), Math.sin(b*x) + d*Math.cos(b*y)];
+}
+function dejong(x, y, a, b, c, d) {
+  return [Math.sin(a*y) - Math.cos(b*x), Math.sin(c*x) - Math.cos(d*y)];
+}
+
+// ── Render ──
+function setStatus(txt) { statusEl.textContent = txt; }
+
+let renderPending = false;
+
+function scheduleRender() {
+  if (renderPending) return;
+  renderPending = true;
+  setStatus('⟳ rendering');
+  requestAnimationFrame(() => {
+    renderPending = false;
+    doRender();
   });
-  render();
+}
+
+function doRender() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0a0a0c';
+  ctx.fillRect(0, 0, W, H);
+
+  const type      = document.getElementById('type').value;
+  const colorMode = document.getElementById('colorMode').value;
+  const n         = getIters() * 1000000 | 0;
+  const a         = getA(), b = getB(), c = getC(), d = getD();
+  const opa       = getOpa() / 100;
+  const psize     = getPsize();
+  const pad       = 60;
+  const BUCKETS   = 512;
+
+  ctx.globalAlpha = 1; // opacity embedded in hsla strings
+
+  // ── Lorenz ──
+  if (type === 'lorenz') {
+    const dt = 0.005;
+    const sigma = a*3+10, rho = b*14+28, beta = c*0.5+2.67;
+    let lx = 0.1, ly = 0, lz = 0, plx = lx, ply = ly, plz = lz;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    let maxSpd = 0;
+    const tmp = []; // [lx, lz, speed, iterIdx]
+    for (let i = 0; i < Math.min(n, 500000); i++) {
+      const dx = sigma*(ly-lx), dy = lx*(rho-lz)-ly, dz = lx*ly-beta*lz;
+      lx += dx*dt; ly += dy*dt; lz += dz*dt;
+      const spd = Math.sqrt((lx-plx)**2+(ly-ply)**2+(lz-plz)**2);
+      tmp.push([lx, lz, spd, i]);
+      if (spd > maxSpd) maxSpd = spd;
+      if (lx < minX) minX = lx; if (lx > maxX) maxX = lx;
+      if (lz < minZ) minZ = lz; if (lz > maxZ) maxZ = lz;
+      plx = lx; ply = ly; plz = lz;
+    }
+    const rx = maxX-minX||1, rz = maxZ-minZ||1;
+    const total = tmp.length;
+    const gradAngle = getGradAngle() * Math.PI / 180;
+    let lastBucket = -1;
+    for (const [px, pz, spd, idx] of tmp) {
+      const sx = pad + (px-minX)/rx*(W-pad*2);
+      const sy = pad + (pz-minZ)/rz*(H-pad*2);
+      let t = 0;
+      if      (colorMode === 'position') t = Math.max(0, Math.min(1, Math.cos(gradAngle)*(sx/W) + Math.sin(gradAngle)*(sy/H)));
+      else if (colorMode === 'iter')     t = idx / total;
+      else if (colorMode === 'speed')    t = maxSpd > 0 ? spd / maxSpd : 0;
+      const bucket = colorMode === 'constant' ? 0 : Math.min(BUCKETS-1, t*BUCKETS|0);
+      if (bucket !== lastBucket) { ctx.fillStyle = tToColor(t, opa); lastBucket = bucket; }
+      ctx.fillRect(sx - psize/2, sy - psize/2, psize, psize);
+    }
+    setStatus('● ready');
+    return;
+  }
+
+  // ── Clifford / De Jong ──
+  const iterate = type === 'clifford' ? clifford : dejong;
+  let x = 0.1, y = 0.1;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let maxSpd = 0;
+  const coords = []; // [ax, ay, speed, iterIdx]
+  for (let i = 0; i < n; i++) {
+    const [nx, ny] = iterate(x, y, a, b, c, d);
+    if (i > 1000) {
+      const spd = Math.sqrt((nx-x)**2+(ny-y)**2);
+      coords.push([x, y, spd, i-1000]);
+      if (spd > maxSpd) maxSpd = spd;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+    x = nx; y = ny;
+  }
+  const rx = maxX-minX||1, ry = maxY-minY||1;
+  const total = coords.length;
+  const gradAngle = getGradAngle() * Math.PI / 180;
+  let lastBucket = -1;
+  for (const [px, py, spd, idx] of coords) {
+    const sx = pad + (px-minX)/rx*(W-pad*2);
+    const sy = pad + (py-minY)/ry*(H-pad*2);
+    let t = 0;
+    if      (colorMode === 'position') t = Math.max(0, Math.min(1, Math.cos(gradAngle)*(sx/W) + Math.sin(gradAngle)*(sy/H)));
+    else if (colorMode === 'iter')     t = idx / total;
+    else if (colorMode === 'speed')    t = maxSpd > 0 ? spd / maxSpd : 0;
+    const bucket = colorMode === 'constant' ? 0 : Math.min(BUCKETS-1, t*BUCKETS|0);
+    if (bucket !== lastBucket) { ctx.fillStyle = tToColor(t, opa); lastBucket = bucket; }
+    ctx.fillRect(sx - psize/2, sy - psize/2, psize, psize);
+  }
+  setStatus('● ready');
+}
+
+// ── Randomize ──
+function randomize() {
+  ['pa','pb','pc','pd'].forEach(id => {
+    const el = document.getElementById(id);
+    const v  = (Math.random() * 6 - 3).toFixed(2);
+    el.value = v;
+    document.getElementById(id + 'V').textContent = v;
+  });
+  scheduleRender();
+}
+
+// ── Controls ──
+document.getElementById('redrawBtn').onclick = scheduleRender;
+document.getElementById('rngBtn').onclick    = randomize;
+
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+function updateFullscreenBtn() {
+  const isFs = !!document.fullscreenElement;
+  fullscreenBtn.innerHTML = (isFs ? 'exit fullscreen' : 'fullscreen') + '<kbd>f</kbd>';
+}
+fullscreenBtn.onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+document.addEventListener('fullscreenchange', updateFullscreenBtn);
+
+document.getElementById('toggle-panel').onclick = () => document.getElementById('panel').classList.toggle('hidden');
+
+// Export
+document.getElementById('exportFmt').addEventListener('change', function() {
+  document.getElementById('qualityCtrl').style.opacity = this.value === 'image/png' ? '0.35' : '1';
+});
+const exportQualityEl = document.getElementById('exportQuality');
+exportQualityEl.addEventListener('input', () => {
+  document.getElementById('exportQualityV').textContent = exportQualityEl.value;
+});
+document.getElementById('exportBtn').onclick = () => {
+  const fmt  = document.getElementById('exportFmt').value;
+  const qual = parseFloat(exportQualityEl.value) / 100;
+  const ext  = fmt === 'image/png' ? 'png' : fmt === 'image/jpeg' ? 'jpg' : 'webp';
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = `strange_attractor_${canvas.width}x${canvas.height}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, fmt, qual);
 };
 
-render();
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'KeyR') { e.preventDefault(); scheduleRender(); }
+  if (e.code === 'KeyN') { e.preventDefault(); randomize(); }
+  if (e.code === 'KeyF') { e.preventDefault(); fullscreenBtn.click(); }
+});
+
+// ── Init ──
+updateColorControls();
+resizeCanvas();
 </script>
+</body>
+</html>
