@@ -253,6 +253,12 @@
     <div class="ctrl"><label>hue offset °</label>
       <div class="ctrl-row"><input type="range" id="hOffset" min="0" max="360" value="180" step="5"><span class="val" id="hOffsetV">180</span></div>
     </div>
+    <div class="ctrl" id="gradAngleCtrl" style="display:none"><label>gradient direction °</label>
+      <div class="ctrl-row"><input type="range" id="gradAngle" min="0" max="360" value="0" step="5"><span class="val" id="gradAngleV">0</span></div>
+    </div>
+    <div class="ctrl" id="colorScaleCtrl" style="display:none"><label>color noise scale</label>
+      <div class="ctrl-row"><input type="range" id="colorScale" min="100" max="1200" value="420" step="50"><span class="val" id="colorScaleV">420</span></div>
+    </div>
     <div class="ctrl" id="curlAmpCtrl" style="display:none"><label>curl sensitivity</label>
       <div class="ctrl-row"><input type="range" id="curlAmp" min="1" max="20" value="5" step="0.5"><span class="val" id="curlAmpV">5</span></div>
     </div>
@@ -264,6 +270,9 @@
     </div>
     <div class="ctrl" id="monoThreshCtrl" style="display:none"><label>accent threshold</label>
       <div class="ctrl-row"><input type="range" id="monoThresh" min="0.05" max="1" value="0.3" step="0.05"><span class="val" id="monoThreshV">0.3</span></div>
+    </div>
+    <div class="ctrl" id="splitAngleCtrl" style="display:none"><label>split angle °</label>
+      <div class="ctrl-row"><input type="range" id="splitAngle" min="10" max="350" value="150" step="5"><span class="val" id="splitAngleV">150</span></div>
     </div>
   </div>
 
@@ -373,6 +382,7 @@ const getHRange=param('hRange'), getHOffset=param('hOffset'), getSat=param('sat'
 const getAngleMult=param('angleMult'), getOctaves=param('octaves'), getLineW=param('lineW'), getLifeVar=param('lifeVar');
 const exportQuality=param('exportQuality');
 const getCurlAmp=param('curlAmp'), getMonoThresh=param('monoThresh');
+const getGradAngle=param('gradAngle'), getColorScale=param('colorScale'), getSplitAngle=param('splitAngle');
 
 // Hide quality slider for PNG since it has no effect
 document.getElementById('exportFmt').addEventListener('change', function() {
@@ -413,7 +423,7 @@ const palettes = {
   ocean: (t)      => `hsla(${(200+getHOffset()%60+t*Math.min(getHRange(),120))%360},${getSat()}%,${getLit()}%,1)`,
   sunset:(t)      => { const s=[[15,90,55],[35,85,60],[55,70,55],[275,60,45]],i=Math.min(3,t*4|0),f=t*4-i,a=s[i],b=s[Math.min(3,i+1)]; return `hsla(${a[0]+(b[0]-a[0])*f},${a[1]}%,${a[2]}%,1)`; },
   mono:  (t,curl) => curl>getMonoThresh()?`hsla(${getHOffset()},${getSat()}%,${getLit()}%,1)`:`hsla(0,0%,${20+t*60}%,1)`,
-  split: (t)      => { const b=getHOffset(); return `hsla(${(t<0.5?b:(b+150+t*getHRange()*0.5))%360},${getSat()}%,${getLit()}%,1)`; },
+  split: (t)      => { const b=getHOffset(); return `hsla(${(t<0.5?b:(b+getSplitAngle()+t*getHRange()*0.5))%360},${getSat()}%,${getLit()}%,1)`; },
 };
 
 function colorForParticle(p, canvasW, sc) {
@@ -423,10 +433,10 @@ function colorForParticle(p, canvasW, sc) {
   const curl  = fieldCurl(p.x, p.y, sc) * getCurlAmp();
   let t = 0;
   if      (mode==='angle')    t = ((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI*2);
-  else if (mode==='position') t = p.x / canvasW;
+  else if (mode==='position') { const θ=getGradAngle()*Math.PI/180; t = Math.max(0,Math.min(1, Math.cos(θ)*(p.x/canvasW) + Math.sin(θ)*(p.y/H))); }
   else if (mode==='age')      t = p.age / p.maxAge;
   else if (mode==='curl')     t = Math.min(1, curl);
-  else if (mode==='speed')    t = noise(p.x/(sc||getNScale())+seed+100, p.y/(sc||getNScale())+seed+100);
+  else if (mode==='speed')    { const cs=sc||getColorScale(); t = noise(p.x/cs+seed+100, p.y/cs+seed+100); }
   return pal(t, curl);
 }
 
@@ -519,8 +529,11 @@ document.getElementById('toggle-panel').onclick = () => document.getElementById(
 function updateColorControls() {
   const mode = document.getElementById('colorMode').value;
   const pal  = document.getElementById('palette').value;
-  document.getElementById('curlAmpCtrl').style.display   = mode === 'curl' ? '' : 'none';
-  document.getElementById('monoThreshCtrl').style.display = pal  === 'mono' ? '' : 'none';
+  document.getElementById('gradAngleCtrl').style.display   = mode === 'position' ? '' : 'none';
+  document.getElementById('colorScaleCtrl').style.display  = mode === 'speed'    ? '' : 'none';
+  document.getElementById('curlAmpCtrl').style.display     = mode === 'curl'     ? '' : 'none';
+  document.getElementById('monoThreshCtrl').style.display  = pal  === 'mono'     ? '' : 'none';
+  document.getElementById('splitAngleCtrl').style.display  = pal  === 'split'    ? '' : 'none';
 }
 document.getElementById('colorMode').addEventListener('change', updateColorControls);
 document.getElementById('palette').addEventListener('change', updateColorControls);
