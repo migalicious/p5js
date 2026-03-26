@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generative Art Sketches</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d10;
+      --surface:   #16161c;
+      --surface2:  #1e1e28;
+      --border:    #2a2a38;
+      --text:      #e8e8f0;
+      --muted:     #7878a0;
+      --accent:    #7c6aff;
+      --accent2:   #ff6ab0;
+      --tag-bg:    #1e1e30;
+      --radius:    12px;
+      --card-w:    340px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 64px 40px 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    header h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    header p {
+      color: var(--muted);
+      max-width: 520px;
+      font-size: 16px;
+    }
+
+    /* ── Grid ── */
+    .gallery {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 40px 80px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(var(--card-w), 1fr));
+      gap: 24px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: 0 16px 48px rgba(124, 106, 255, 0.15);
+    }
+
+    /* ── Thumbnail ── */
+    .thumb-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: var(--surface2);
+      overflow: hidden;
+    }
+
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+
+    .card:hover .thumb-wrap img {
+      transform: scale(1.03);
+    }
+
+    /* Placeholder shown when no thumbnail */
+    .thumb-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--surface2);
+    }
+
+    .thumb-placeholder svg {
+      opacity: 0.18;
+      width: 48px;
+      height: 48px;
+    }
+
+    .thumb-placeholder span {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      opacity: 0.6;
+    }
+
+    /* Hide placeholder once image loads */
+    .thumb-wrap img.loaded + .thumb-placeholder,
+    .thumb-wrap img:not([data-error]) + .thumb-placeholder {
+      display: none;
+    }
+
+    /* ── Card Body ── */
+    .card-body {
+      padding: 20px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .card-desc {
+      font-size: 13.5px;
+      color: var(--muted);
+      line-height: 1.55;
+      flex: 1;
+    }
+
+    /* ── Tags ── */
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .tag {
+      background: var(--tag-bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 10.5px;
+      letter-spacing: 0.06em;
+      padding: 3px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    /* ── Open Button ── */
+    .card-footer {
+      padding: 0 24px 20px;
+    }
+
+    .btn-open {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .btn-open:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-open svg {
+      flex-shrink: 0;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      max-width: 1200px;
+      margin: 0 auto 0;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 24px 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    footer p {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      header { padding: 40px 20px 32px; }
+      .gallery { padding: 0 20px 60px; }
+      footer { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-eyebrow">Canvas · Noise · Fractals · Chaos</div>
+  <h1>Generative Art Sketches</h1>
+  <p>Interactive browser-based generative art. Each sketch runs entirely client-side — no build step required.</p>
+</header>
+
+<div class="gallery" id="gallery"></div>
+
+<div class="divider"></div>
+<footer>
+  <p>Open any sketch in a modern browser &mdash; no server needed.</p>
+  <p><a href="README.md">README</a></p>
+</footer>
+
+<script>
+  const sketches = [
+    {
+      file: 'color_flow_field.html',
+      title: 'Color Flow Field',
+      desc: 'A feature-rich particle system driven by layered Perlin noise. Six color modes, six palettes, and full PNG/JPEG/WebP export with fine-grained parameter controls.',
+      tags: ['Particles', 'Noise', 'Export'],
+    },
+    {
+      file: 'koch_layers.html',
+      title: 'Koch Layers',
+      desc: 'Up to six independent Koch curve fractals overlaid on a single canvas, each with its own color, iteration depth, rotation, and blend mode.',
+      tags: ['Fractal', 'L-System', 'Layered'],
+    },
+    {
+      file: 'lsystem_tree_interactive.html',
+      title: 'L-System Tree',
+      desc: 'Procedural branching structures (tree, fern, coral, snowflake) generated by expanding L-system strings and drawn with stack-based turtle graphics.',
+      tags: ['Fractal', 'L-System', 'Procedural'],
+    },
+    {
+      file: 'strange_attractor_interactive.html',
+      title: 'Strange Attractors',
+      desc: 'Millions of iterated points reveal the hidden geometry of Clifford, De Jong, and Lorenz attractors. Adjust the four parameters or hit Randomize to discover new forms.',
+      tags: ['Chaos', 'Math', 'Attractor'],
+    },
+  ];
+
+  const iconCanvas = `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="8" width="40" height="32" rx="3" stroke="currentColor" stroke-width="2.5"/>
+    <path d="M4 16h40" stroke="currentColor" stroke-width="2.5"/>
+    <circle cx="10" cy="12" r="1.5" fill="currentColor"/>
+    <circle cx="16" cy="12" r="1.5" fill="currentColor"/>
+    <circle cx="22" cy="12" r="1.5" fill="currentColor"/>
+    <path d="M14 28l6-6 4 4 6-8 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+
+  const arrowIcon = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+
+  const gallery = document.getElementById('gallery');
+
+  sketches.forEach(({ file, title, desc, tags }) => {
+    const thumb = `thumbnails/${file.replace('.html', '.png')}`;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    card.innerHTML = `
+      <div class="thumb-wrap">
+        <img
+          src="${thumb}"
+          alt="${title} thumbnail"
+          loading="lazy"
+        >
+        <div class="thumb-placeholder">
+          ${iconCanvas}
+          <span>${file}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${title}</div>
+        <div class="card-desc">${desc}</div>
+        <div class="tags">${tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      </div>
+      <div class="card-footer">
+        <a class="btn-open" href="${file}" target="_blank" rel="noopener">
+          Open sketch ${arrowIcon}
+        </a>
+      </div>
+    `;
+
+    // Show placeholder when image fails to load
+    const img = card.querySelector('img');
+    const placeholder = card.querySelector('.thumb-placeholder');
+
+    img.addEventListener('load', () => {
+      placeholder.style.display = 'none';
+    });
+
+    img.addEventListener('error', () => {
+      img.style.display = 'none';
+      placeholder.style.display = 'flex';
+    });
+
+    gallery.appendChild(card);
+  });
+</script>
+
+</body>
+</html>
