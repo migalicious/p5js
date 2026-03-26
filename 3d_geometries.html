@@ -121,8 +121,8 @@
   .pill.on { border-color:rgba(124,108,252,0.6); background:rgba(124,108,252,0.18); color:#b8afff; }
   .pill:hover { border-color:var(--accent); }
 
-  .field-only, .grid-only { transition:opacity 0.2s; }
-  .field-only.hidden-ctrl, .grid-only.hidden-ctrl { opacity:0.25; pointer-events:none; }
+  .field-only, .grid-only, .grid-or-all { transition:opacity 0.2s; }
+  .field-only.hidden-ctrl, .grid-only.hidden-ctrl, .grid-or-all.hidden-ctrl { opacity:0.25; pointer-events:none; }
 </style>
 </head>
 <body>
@@ -194,9 +194,9 @@
     </div>
   </div>
 
-  <!-- GRID SHAPES -->
-  <div class="section grid-only">
-    <div class="section-label">shapes (grid mode)</div>
+  <!-- GRID + ALL SHAPES -->
+  <div class="section grid-or-all">
+    <div class="section-label">shapes visible</div>
     <div class="shape-pills">
       <span class="pill on" data-shape="plane">plane</span>
       <span class="pill on" data-shape="box">box</span>
@@ -397,6 +397,8 @@ document.querySelectorAll('.pill[data-shape]').forEach(pill => {
     const s = pill.dataset.shape;
     shapeVisible[s] = !shapeVisible[s];
     pill.classList.toggle('on', shapeVisible[s]);
+    // rebuild field if in all-shapes mode so the pool updates immediately
+    if (document.getElementById('displayMode').value === 'all') rebuildField();
   });
 });
 
@@ -406,6 +408,7 @@ function applyModeUI() {
   const isField = mode !== 'grid';
   document.querySelectorAll('.field-only').forEach(el => el.classList.toggle('hidden-ctrl', !isField));
   document.querySelectorAll('.grid-only').forEach(el  => el.classList.toggle('hidden-ctrl',  mode !== 'grid'));
+  document.querySelectorAll('.grid-or-all').forEach(el => el.classList.toggle('hidden-ctrl', mode === 'field'));
   // hide per-shape picker in "all" mode
   const fsc = document.getElementById('fieldShapeCtrl');
   if (fsc) fsc.classList.toggle('hidden-ctrl', mode === 'all');
@@ -498,10 +501,12 @@ function rebuildField() {
     for (let i = 0; i < count; i++) {
       fieldParticles.push(makeParticle(i, count, shape, W, H, false));
     }
-  } else { // all shapes
-    const perShape = Math.max(2, Math.round(count / ALL_SHAPES.length));
-    const total    = perShape * ALL_SHAPES.length;
-    ALL_SHAPES.forEach((shape, si) => {
+  } else { // all shapes — use shapeVisible to filter
+    const activeShapes = ALL_SHAPES.filter(s => shapeVisible[s]);
+    if (activeShapes.length === 0) return;
+    const perShape = Math.max(2, Math.round(count / activeShapes.length));
+    const total    = perShape * activeShapes.length;
+    activeShapes.forEach((shape, si) => {
       for (let i = 0; i < perShape; i++) {
         fieldParticles.push(makeParticle(si * perShape + i, total, shape, W, H, false));
       }
@@ -510,10 +515,16 @@ function rebuildField() {
 }
 
 function respawnParticle(p, W, H) {
-  const mode   = document.getElementById('displayMode').value;
-  const shape  = mode === 'all'
-    ? ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)]
-    : document.getElementById('fieldShape').value;
+  const mode = document.getElementById('displayMode').value;
+  let shape;
+  if (mode === 'all') {
+    const activeShapes = ALL_SHAPES.filter(s => shapeVisible[s]);
+    shape = activeShapes.length > 0
+      ? activeShapes[Math.floor(Math.random() * activeShapes.length)]
+      : ALL_SHAPES[0];
+  } else {
+    shape = document.getElementById('fieldShape').value;
+  }
   const tmp = makeParticle(Math.random(), 1, shape, W, H, true);
   Object.assign(p, tmp);
 }
