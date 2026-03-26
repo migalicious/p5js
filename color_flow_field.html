@@ -266,20 +266,35 @@
     <div class="ctrl"><label>noise scale</label>
       <div class="ctrl-row"><input type="range" id="nScale" min="100" max="1200" value="420" step="50"><span class="val" id="nScaleV">420</span></div>
     </div>
+    <div class="ctrl"><label>angle multiplier</label>
+      <div class="ctrl-row"><input type="range" id="angleMult" min="0.5" max="8" value="4" step="0.25"><span class="val" id="angleMultV">4</span></div>
+    </div>
+    <div class="ctrl"><label>octaves — detail layers</label>
+      <div class="ctrl-row"><input type="range" id="octaves" min="1" max="4" value="1" step="1"><span class="val" id="octavesV">1</span></div>
+    </div>
     <div class="ctrl"><label>particles</label>
       <div class="ctrl-row"><input type="range" id="nPart" min="200" max="6000" value="1800" step="100"><span class="val" id="nPartV">1800</span></div>
     </div>
     <div class="ctrl"><label>step length</label>
       <div class="ctrl-row"><input type="range" id="step" min="1" max="10" value="3" step="0.5"><span class="val" id="stepV">3</span></div>
     </div>
+    <div class="ctrl"><label>line width</label>
+      <div class="ctrl-row"><input type="range" id="lineW" min="0.2" max="4" value="0.9" step="0.1"><span class="val" id="lineWV">0.9</span></div>
+    </div>
     <div class="ctrl"><label>lifetime</label>
       <div class="ctrl-row"><input type="range" id="life" min="20" max="300" value="90" step="5"><span class="val" id="lifeV">90</span></div>
+    </div>
+    <div class="ctrl"><label>lifetime variance</label>
+      <div class="ctrl-row"><input type="range" id="lifeVar" min="0" max="200" value="40" step="5"><span class="val" id="lifeVarV">40</span></div>
     </div>
     <div class="ctrl"><label>line opacity %</label>
       <div class="ctrl-row"><input type="range" id="opa" min="3" max="70" value="15" step="1"><span class="val" id="opaV">15</span></div>
     </div>
     <div class="ctrl"><label>bg fade — trail</label>
       <div class="ctrl-row"><input type="range" id="fade" min="0" max="15" value="0" step="1"><span class="val" id="fadeV">0</span></div>
+    </div>
+    <div class="ctrl"><label>background color</label>
+      <input type="color" id="bgColor" value="#000000" style="width:100%;height:28px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;padding:2px 4px;">
     </div>
   </div>
 
@@ -290,9 +305,23 @@
     </div>
     <div class="btn-row">
       <button id="pauseBtn">pause<kbd>space</kbd></button>
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+    </div>
+    <div class="section-label" style="padding-top:4px">export</div>
+    <div class="ctrl"><label>format + quality</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="exportFmt" style="flex:1;padding:5px 8px">
+          <option value="image/png">png — lossless</option>
+          <option value="image/jpeg" selected>jpeg — smaller</option>
+          <option value="image/webp">webp — best ratio</option>
+        </select>
+      </div>
+    </div>
+    <div class="ctrl" id="qualityCtrl"><label>quality %  <span style="font-size:9px;color:var(--text-dim)">(jpeg/webp only)</span></label>
+      <div class="ctrl-row"><input type="range" id="exportQuality" min="60" max="100" value="93" step="1"><span class="val" id="exportQualityV">93</span></div>
     </div>
     <div class="btn-row">
-      <button class="export-btn" id="exportBtn">export png ↓</button>
+      <button class="export-btn" id="exportBtn">save image ↓</button>
     </div>
   </div>
 </div>
@@ -318,7 +347,7 @@ function resizeCanvas() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(DPR, DPR);
   dimBadge.textContent = `${canvas.width}×${canvas.height}`;
-  ctx.fillStyle = '#000';
+  ctx.fillStyle = document.getElementById('bgColor') ? getBgColor() : '#000';
   ctx.fillRect(0, 0, W, H);
   restart();
 }
@@ -335,6 +364,13 @@ function param(id) {
 const getNScale=param('nScale'), getNPart=param('nPart'), getStep=param('step');
 const getLife=param('life'),     getOpa=param('opa'),     getFade=param('fade');
 const getHRange=param('hRange'), getHOffset=param('hOffset'), getSat=param('sat'), getLit=param('lit');
+const getAngleMult=param('angleMult'), getOctaves=param('octaves'), getLineW=param('lineW'), getLifeVar=param('lifeVar');
+const exportQuality=param('exportQuality');
+
+// Hide quality slider for PNG since it has no effect
+document.getElementById('exportFmt').addEventListener('change', function() {
+  document.getElementById('qualityCtrl').style.opacity = this.value === 'image/png' ? '0.35' : '1';
+});
 
 // --- noise ---
 function hash(x, y) { let n = Math.sin(x*127.1+y*311.7)*43758.5453; return n-(n|0); }
@@ -348,7 +384,15 @@ let seed = Math.random() * 1000;
 let particles = [], paused = false, pendingClear = false;
 
 function fieldAngle(x, y, sc) {
-  return noise(x/(sc||getNScale())+seed, y/(sc||getNScale())+seed+7.3) * Math.PI * 4;
+  const s = sc || getNScale();
+  const oct = getOctaves()|0;
+  const mult = getAngleMult();
+  let n = noise(x/s + seed, y/s + seed + 7.3);
+  // Each extra octave adds finer detail at half amplitude
+  if (oct >= 2) n += 0.5  * noise(x/(s*0.5) + seed + 31.7, y/(s*0.5) + seed + 19.3);
+  if (oct >= 3) n += 0.25 * noise(x/(s*0.25) + seed + 61.1, y/(s*0.25) + seed + 47.9);
+  if (oct >= 4) n += 0.125* noise(x/(s*0.125)+ seed + 91.3, y/(s*0.125)+ seed + 83.7);
+  return n * Math.PI * mult;
 }
 function fieldCurl(x, y, sc) {
   const e = sc ? 2*(sc/getNScale()) : 2;
@@ -379,8 +423,11 @@ function colorForParticle(p, canvasW, sc) {
   return pal(t, curl);
 }
 
+function getBgColor() {
+  return document.getElementById('bgColor').value;
+}
 function makeParticle(cW, cH) {
-  return { x: Math.random()*(cW||W), y: Math.random()*(cH||H), age:0, maxAge: getLife()+(Math.random()*40|0) };
+  return { x: Math.random()*(cW||W), y: Math.random()*(cH||H), age:0, maxAge: getLife()+(Math.random()*getLifeVar()|0) };
 }
 function restart() {
   particles = [];
@@ -389,9 +436,9 @@ function restart() {
 
 function draw() {
   const fade = getFade();
-  if (fade > 0) { ctx.globalAlpha=fade/100; ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); }
+  if (fade > 0) { ctx.globalAlpha=fade/100; ctx.fillStyle=getBgColor(); ctx.fillRect(0,0,W,H); }
   const step = getStep();
-  ctx.lineWidth = 0.9;
+  ctx.lineWidth = getLineW();
   for (const p of particles) {
     const angle = fieldAngle(p.x, p.y);
     const nx=p.x+Math.cos(angle)*step, ny=p.y+Math.sin(angle)*step;
@@ -401,7 +448,7 @@ function draw() {
     p.x=nx; p.y=ny; p.age++;
     if (p.age>p.maxAge||p.x<0||p.x>W||p.y<0||p.y>H) {
       if (particles.length>(getNPart()|0)) particles.splice(particles.indexOf(p),1);
-      else { p.x=Math.random()*W; p.y=Math.random()*H; p.age=0; p.maxAge=getLife()+(Math.random()*40|0); }
+      else { p.x=Math.random()*W; p.y=Math.random()*H; p.age=0; p.maxAge=getLife()+(Math.random()*getLifeVar()|0); }
     }
   }
   while (particles.length<(getNPart()|0)) particles.push(makeParticle());
@@ -410,7 +457,7 @@ function draw() {
 function loop() {
   if (pendingClear) {
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = getBgColor();
     ctx.fillRect(0, 0, W, H);
     pendingClear = false;
   }
@@ -429,6 +476,9 @@ document.getElementById('reseedBtn').onclick = () => {
 };
 document.getElementById('clearBtn').onclick = () => { pendingClear = true; };
 
+// bgColor change should also clear to new color
+document.getElementById('bgColor').addEventListener('input', () => { pendingClear = true; });
+
 const pauseBtn = document.getElementById('pauseBtn');
 pauseBtn.onclick = () => {
   paused=!paused;
@@ -436,26 +486,40 @@ pauseBtn.onclick = () => {
   pauseBtn.classList.toggle('active', paused);
   statusEl.textContent = paused ? '⏸ paused' : '● live';
 };
+
+// Fullscreen
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+function updateFullscreenBtn() {
+  const isFs = !!document.fullscreenElement;
+  fullscreenBtn.innerHTML = (isFs ? 'exit fullscreen' : 'fullscreen') + '<kbd>f</kbd>';
+}
+fullscreenBtn.onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+document.addEventListener('fullscreenchange', updateFullscreenBtn);
+
 document.addEventListener('keydown', e => {
-  if (e.code==='Space' && e.target.tagName!=='INPUT' && e.target.tagName!=='SELECT') {
-    e.preventDefault(); pauseBtn.click();
-  }
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { e.preventDefault(); pauseBtn.click(); }
+  if (e.code === 'KeyF')  { e.preventDefault(); fullscreenBtn.click(); }
 });
 
 document.getElementById('toggle-panel').onclick = () => document.getElementById('panel').classList.toggle('hidden');
 
 // --- export ---
-
-// Export: snapshot the live canvas exactly as-is
 document.getElementById('exportBtn').onclick = () => {
+  const fmt  = document.getElementById('exportFmt').value;
+  const qual = exportQuality() / 100;
+  const ext  = fmt === 'image/png' ? 'png' : fmt === 'image/jpeg' ? 'jpg' : 'webp';
   canvas.toBlob(blob => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `flow_field_${canvas.width}x${canvas.height}_${seed.toFixed(0)}.png`;
+    a.download = `flow_field_${canvas.width}x${canvas.height}_${seed.toFixed(0)}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
-  }, 'image/png');
+  }, fmt, qual);
 };
 </script>
 </body>
