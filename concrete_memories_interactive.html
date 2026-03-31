@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>concrete memories</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+  canvas {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+  }
+  .val { min-width: 36px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>concrete memories</h1>
+  <span id="dim-badge"></span>
+  <span id="status">⟳ generating…</span>
+</div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <div class="section">
+    <div class="section-label">structure</div>
+    <div class="ctrl"><label>core count</label>
+      <div class="ctrl-row"><input type="range" id="p_coreCount" min="8" max="22" value="15" step="1"><span class="val" id="p_coreCountV">15</span></div>
+    </div>
+    <div class="ctrl"><label>module size</label>
+      <div class="ctrl-row"><input type="range" id="p_unit" min="22" max="42" value="32" step="1"><span class="val" id="p_unitV">32</span></div>
+    </div>
+    <div class="ctrl"><label>max height</label>
+      <div class="ctrl-row"><input type="range" id="p_coreMaxH" min="1.6" max="2.6" value="2.1" step="0.1"><span class="val" id="p_coreMaxHV">2.1</span></div>
+    </div>
+    <div class="ctrl"><label>max blocks</label>
+      <div class="ctrl-row"><input type="range" id="p_maxBlocks" min="50" max="220" value="160" step="10"><span class="val" id="p_maxBlocksV">160</span></div>
+    </div>
+    <div class="ctrl"><label>wild shapes</label>
+      <div class="ctrl-row"><input type="range" id="p_wildChance" min="0.05" max="0.5" value="0.3" step="0.05"><span class="val" id="p_wildChanceV">0.3</span></div>
+    </div>
+    <div class="ctrl"><label>satellite chance</label>
+      <div class="ctrl-row"><input type="range" id="p_satelliteChance" min="0" max="0.3" value="0.15" step="0.05"><span class="val" id="p_satelliteChanceV">0.15</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">perspective</div>
+    <div class="ctrl"><label>horizon height</label>
+      <div class="ctrl-row"><input type="range" id="p_horizonFrac" min="0.1" max="0.5" value="0.28" step="0.01"><span class="val" id="p_horizonFracV">0.28</span></div>
+    </div>
+    <div class="ctrl"><label>vanishing pt dist</label>
+      <div class="ctrl-row"><input type="range" id="p_vpDist" min="0.5" max="1.2" value="0.9" step="0.05"><span class="val" id="p_vpDistV">0.9</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">lighting</div>
+    <div class="ctrl"><label>light direction</label>
+      <div class="ctrl-row"><input type="range" id="p_lightAzim" min="0" max="1" value="0.5" step="0.05"><span class="val" id="p_lightAzimV">0.5</span></div>
+    </div>
+    <div class="ctrl"><label>light elevation</label>
+      <div class="ctrl-row"><input type="range" id="p_lightElev" min="0.2" max="0.8" value="0.5" step="0.05"><span class="val" id="p_lightElevV">0.5</span></div>
+    </div>
+    <div class="ctrl"><label>ambient fill</label>
+      <div class="ctrl-row"><input type="range" id="p_lightAmbient" min="0.05" max="0.35" value="0.18" step="0.01"><span class="val" id="p_lightAmbientV">0.18</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">palette</div>
+    <div class="ctrl">
+      <label>color set</label>
+      <select id="p_palette">
+        <option value="-1">random</option>
+        <option value="0">warm — cream &amp; orange</option>
+        <option value="1">midnight — navy &amp; gold</option>
+        <option value="2">blood — crimson &amp; white</option>
+        <option value="3">ocean — teal &amp; smoke</option>
+        <option value="4">citrus — teal &amp; yellow</option>
+        <option value="5">coral — salmon &amp; stone</option>
+        <option value="6">gilt — white &amp; gold</option>
+        <option value="7">ash — gray scale</option>
+        <option value="8">blueprint — blue &amp; steel</option>
+        <option value="9">circuit — black &amp; lime</option>
+        <option value="10">linen — warm neutrals</option>
+        <option value="11">grove — green &amp; cream</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">texture</div>
+    <div class="ctrl"><label>watercolor prob</label>
+      <div class="ctrl-row"><input type="range" id="p_textureWatercolor" min="0" max="1" value="0.74" step="0.05"><span class="val" id="p_textureWatercolorV">0.74</span></div>
+    </div>
+    <div class="ctrl"><label>watercolor density</label>
+      <div class="ctrl-row"><input type="range" id="p_watercolorCoverage" min="20" max="200" value="110" step="10"><span class="val" id="p_watercolorCoverageV">110</span></div>
+    </div>
+    <div class="ctrl"><label>hatching prob</label>
+      <div class="ctrl-row"><input type="range" id="p_textureHatching" min="0" max="1" value="0.6" step="0.05"><span class="val" id="p_textureHatchingV">0.6</span></div>
+    </div>
+    <div class="ctrl"><label>subdivision prob</label>
+      <div class="ctrl-row"><input type="range" id="p_textureSubdivision" min="0" max="1" value="0.47" step="0.05"><span class="val" id="p_textureSubdivisionV">0.47</span></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="btn-row">
+      <button class="primary" id="regenBtn">regenerate<kbd>r</kbd></button>
+      <button id="rngBtn">randomize<kbd>n</kbd></button>
+    </div>
+    <div class="btn-row">
+      <button id="clearBtn">clear<kbd>c</kbd></button>
+    </div>
+    <div class="section-label" style="padding-top:4px">export</div>
+    <div class="btn-row">
+      <button class="export-btn" id="exportBtn" disabled>save png ↓<kbd>e</kbd></button>
+    </div>
+  </div>
+</div>
+
+<!-- p5.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+
+<!-- fip stub: passthrough GLSL so createFilterShader calls don't crash.
+     The sketch applies a "sketch" look and paper deformation post-process;
+     these shaders preserve the image as-is instead. -->
+<script>
+const _PT = `precision highp float;
+uniform sampler2D tex0;
+varying vec2 vTexCoord;
+void main() {
+  vec2 uv = vTexCoord;
+  uv.y = 1.0 - uv.y;
+  gl_FragColor = texture2D(tex0, uv);
+}`;
+const fip = {
+  sketch: _PT,
+  deform: `precision highp float;
+uniform sampler2D tex0;
+uniform float deformationAmount;
+varying vec2 vTexCoord;
+void main() {
+  vec2 uv = vTexCoord;
+  uv.y = 1.0 - uv.y;
+  gl_FragColor = texture2D(tex0, uv);
+}`,
+  dithering: `precision highp float;
+uniform sampler2D tex0;
+uniform float threshold;
+uniform float dotSize;
+varying vec2 vTexCoord;
+void main() {
+  vec2 uv = vTexCoord;
+  uv.y = 1.0 - uv.y;
+  gl_FragColor = texture2D(tex0, uv);
+}`,
+};
+</script>
+
+<!-- Sketch (unmodified) -->
+<script src="sketches/concrete-Memories.js"></script>
+
+<!-- Editor: override rr(), regenerate(), noLoop() and wire up the UI -->
+<script>
+// ── Inject slider values into rr() ───────────────────────────────────────────
+// rr(name) checks for a DOM slider with id "p_<name>" first;
+// falls back to original random-range behaviour for unlocked params.
+const _origRr = window.rr;
+window.rr = function(name) {
+  const el = document.getElementById('p_' + name);
+  if (el) return parseFloat(el.value);
+  return _origRr(name);
+};
+
+// ── Inject palette selection into regenerate() ───────────────────────────────
+// PALETTE_COLORS is consumed during rendering, not structure generation,
+// so overriding it immediately after origRegen() returns is safe.
+const _origRegen = window.regenerate;
+window.regenerate = function() {
+  _origRegen();
+  const sel = document.getElementById('p_palette');
+  if (sel && sel.value !== '-1')
+    window.PALETTE_COLORS = window.AVAILABLE_PALETTES[+sel.value];
+};
+
+// ── Track render completion via noLoop() intercept ───────────────────────────
+const statusEl  = document.getElementById('status');
+const dimBadge  = document.getElementById('dim-badge');
+const exportBtn = document.getElementById('exportBtn');
+
+const _origNoLoop = window.noLoop;
+window.noLoop = function() {
+  _origNoLoop();
+  statusEl.textContent = '● ready';
+  exportBtn.disabled = false;
+  const cvs = document.querySelector('canvas');
+  if (cvs) dimBadge.textContent = `${cvs.width}×${cvs.height}`;
+};
+
+// ── Slider value display (no auto-render) ────────────────────────────────────
+document.querySelectorAll('#panel input[type=range]').forEach(el => {
+  const dsp = document.getElementById(el.id + 'V');
+  if (dsp) el.addEventListener('input', () => { dsp.textContent = el.value; });
+});
+
+// ── Regenerate ───────────────────────────────────────────────────────────────
+function doRegen() {
+  statusEl.textContent = '⟳ generating…';
+  exportBtn.disabled = true;
+  window.regenerate();
+}
+
+document.getElementById('regenBtn').addEventListener('click', doRegen);
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+function doClear() {
+  window.noLoop();
+  window.clear();
+  window.background('#f8f8f8');
+  statusEl.textContent = '● ready';
+  exportBtn.disabled = false;
+}
+
+document.getElementById('clearBtn').addEventListener('click', doClear);
+
+// ── Randomize All ─────────────────────────────────────────────────────────────
+const SLIDER_DEFS = [
+  ['p_coreCount',         8,    22,   1   ],
+  ['p_unit',              22,   42,   1   ],
+  ['p_coreMaxH',          1.6,  2.6,  0.1 ],
+  ['p_maxBlocks',         50,   220,  10  ],
+  ['p_wildChance',        0.05, 0.5,  0.05],
+  ['p_satelliteChance',   0,    0.3,  0.05],
+  ['p_horizonFrac',       0.1,  0.5,  0.01],
+  ['p_vpDist',            0.5,  1.2,  0.05],
+  ['p_lightAzim',         0,    1,    0.05],
+  ['p_lightElev',         0.2,  0.8,  0.05],
+  ['p_lightAmbient',      0.05, 0.35, 0.01],
+  ['p_textureWatercolor', 0,    1,    0.05],
+  ['p_watercolorCoverage',20,   200,  10  ],
+  ['p_textureHatching',   0,    1,    0.05],
+  ['p_textureSubdivision',0,    1,    0.05],
+];
+
+function doRandomize() {
+  for (const [id, min, max, step] of SLIDER_DEFS) {
+    const el  = document.getElementById(id);
+    const dsp = document.getElementById(id + 'V');
+    if (!el) continue;
+    const steps = Math.round((max - min) / step);
+    const raw   = min + Math.round(Math.random() * steps) * step;
+    const dec   = step < 0.1 ? 2 : step < 1 ? 2 : 0;
+    el.value    = raw.toFixed(dec);
+    if (dsp) dsp.textContent = el.value;
+  }
+  // pick one of the 12 named palettes at random
+  document.getElementById('p_palette').value = String(Math.floor(Math.random() * 12));
+  doRegen();
+}
+
+document.getElementById('rngBtn').addEventListener('click', doRandomize);
+
+// ── Export ────────────────────────────────────────────────────────────────────
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const cvs = document.querySelector('canvas');
+  if (!cvs) return;
+  cvs.toBlob(blob => {
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `concrete-memories-${cvs.width}x${cvs.height}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, 'image/png');
+});
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'r' || e.key === 'R') doRegen();
+  if (e.key === 'n' || e.key === 'N') doRandomize();
+  if (e.key === 'e' || e.key === 'E') exportBtn.click();
+  if (e.key === 'c' || e.key === 'C') doClear();
+});
+
+// ── Panel toggle ──────────────────────────────────────────────────────────────
+document.getElementById('toggle-panel').addEventListener('click', () => {
+  document.getElementById('panel').classList.toggle('hidden');
+});
+</script>
+
+</body>
+</html>
