@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>batch flow field</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+  :root {
+    --surface: rgba(13, 13, 20, 0.98);
+  }
+
+  #layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Left panel ── */
+  #config-panel {
+    width: var(--panel-w);
+    flex-shrink: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-right: 1px solid var(--border2);
+  }
+
+  #config-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  #config-scroll::-webkit-scrollbar { width: 4px; }
+  #config-scroll::-webkit-scrollbar-track { background: transparent; }
+  #config-scroll::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
+  /* ── Right gallery ── */
+  #gallery-col {
+    flex: 1;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #gallery-col::-webkit-scrollbar { width: 6px; }
+  #gallery-col::-webkit-scrollbar-track { background: transparent; }
+  #gallery-col::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+
+  .panel-header {
+    padding: 16px 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-header a {
+    color: var(--text-dim); text-decoration: none;
+    font-size: 8px; letter-spacing: 0.1em;
+  }
+  .panel-header a:hover { color: var(--accent); }
+
+  .section { gap: 10px; }
+
+  .val { min-width: 34px; }
+
+  input[type=number] {
+    width: 100%; padding: 5px 8px;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 6px; color: var(--text); font-family: var(--font-mono);
+    font-size: 10px; outline: none;
+  }
+  input[type=number]:focus { border-color: var(--accent); }
+  input[type=number]::placeholder { color: var(--text-dim); }
+
+  .check-row {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); cursor: pointer;
+    user-select: none;
+  }
+  .check-row input[type=checkbox] {
+    width: 12px; height: 12px; cursor: pointer;
+    accent-color: var(--accent); flex-shrink: 0;
+  }
+  .check-row.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+  .custom-res-row {
+    display: none; align-items: center; gap: 6px;
+  }
+  .custom-res-row.show { display: flex; }
+  .custom-res-row input { flex: 1; }
+  .custom-res-row span {
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  }
+
+  details.section { cursor: default; }
+  details.section > summary {
+    cursor: pointer; list-style: none;
+    display: flex; align-items: center; gap: 6px;
+    outline: none;
+  }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary::before {
+    content: '▶';
+    font-size: 7px; color: var(--text-dim);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+  details.section[open] > summary::before { transform: rotate(90deg); }
+
+  .override-fields { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+
+  #progress-area {
+    flex-shrink: 0;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--border);
+  }
+  #progress-text {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--text-muted); margin-bottom: 8px;
+    letter-spacing: 0.04em; line-height: 1.5;
+  }
+  #progress-bar-track {
+    height: 3px; background: var(--surface2);
+    border-radius: 2px; overflow: hidden;
+  }
+  #progress-bar-fill {
+    height: 100%; background: var(--accent);
+    width: 0; transition: width 0.25s ease;
+    border-radius: 2px;
+  }
+
+  /* ── Gallery ── */
+  #gallery-header {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.14em; color: var(--text-dim);
+    text-transform: uppercase; flex-shrink: 0;
+  }
+
+  #gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+  }
+
+  .thumb-card {
+    position: relative; border-radius: 8px;
+    overflow: hidden; border: 1px solid var(--border);
+    background: var(--surface2); aspect-ratio: 1;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .thumb-card:hover {
+    border-color: var(--border2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .thumb-card img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+
+  .thumb-overlay {
+    position: absolute; bottom: 0; width: 100%;
+    padding: 24px 8px 7px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    display: flex; justify-content: space-between;
+    align-items: flex-end; gap: 4px;
+  }
+  .thumb-label {
+    font-family: var(--font-mono); font-size: 8px;
+    color: rgba(255,255,255,0.55); line-height: 1.5;
+    min-width: 0; overflow: hidden;
+  }
+  .thumb-dl {
+    flex: 0 0 auto !important;
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    border-radius: 5px !important;
+    background: rgba(56,189,248,0.2) !important;
+    border-color: rgba(56,189,248,0.35) !important;
+    color: #7dd3fc !important;
+    transition: background 0.15s !important;
+  }
+  .thumb-dl:hover { background: rgba(56,189,248,0.38) !important; }
+
+  #empty-state {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    flex: 1; min-height: 300px;
+    gap: 12px; color: var(--text-dim);
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.1em; text-align: center;
+  }
+  #empty-state svg { opacity: 0.15; }
+</style>
+</head>
+<body>
+
+<canvas id="offscreen" style="display:none;position:absolute;pointer-events:none;" aria-hidden="true"></canvas>
+
+<div id="layout">
+
+  <!-- ── LEFT PANEL ── -->
+  <div id="config-panel">
+    <div class="panel-header">
+      <span>batch flow field</span>
+      <a href="color_flow_field.html" target="_blank">↗ interactive</a>
+    </div>
+
+    <div id="config-scroll">
+
+      <!-- Batch Settings -->
+      <div class="section">
+        <div class="section-label">batch settings</div>
+
+        <div class="ctrl">
+          <label>count (images)</label>
+          <input type="number" id="countInput" min="1" max="200" value="12">
+        </div>
+
+        <div class="ctrl">
+          <label>resolution</label>
+          <select id="resPicker">
+            <option value="1080sq">1080 × 1080  — square</option>
+            <option value="1080p">1920 × 1080  — hd</option>
+            <option value="1440p">2560 × 1440  — qhd</option>
+            <option value="4k">3840 × 2160  — 4k</option>
+            <option value="custom">custom…</option>
+          </select>
+        </div>
+
+        <div class="custom-res-row ctrl-row" id="customResRow">
+          <input type="number" id="customW" min="100" max="8000" value="1200" placeholder="width">
+          <span>×</span>
+          <input type="number" id="customH" min="100" max="8000" value="800" placeholder="height">
+        </div>
+
+        <div class="ctrl">
+          <label>base frames</label>
+          <div class="ctrl-row">
+            <input type="range" id="baseFrames" min="50" max="600" value="200" step="10">
+            <span class="val" id="baseFramesV">200</span>
+          </div>
+        </div>
+
+        <div class="ctrl">
+          <label>frame variance ±</label>
+          <div class="ctrl-row">
+            <input type="range" id="frameVar" min="0" max="200" value="60" step="10">
+            <span class="val" id="frameVarV">60</span>
+          </div>
+        </div>
+
+        <div class="ctrl">
+          <label>export format</label>
+          <select id="exportFmt">
+            <option value="image/png" selected>png — lossless</option>
+            <option value="image/jpeg">jpeg — smaller</option>
+            <option value="image/webp">webp — best ratio</option>
+          </select>
+        </div>
+
+        <div class="ctrl" id="qualityCtrl" style="opacity:0.35">
+          <label>quality % <span style="font-size:9px;color:var(--text-dim)">(jpeg / webp)</span></label>
+          <div class="ctrl-row">
+            <input type="range" id="exportQuality" min="60" max="100" value="93" step="1">
+            <span class="val" id="exportQualityV">93</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Randomize -->
+      <div class="section">
+        <div class="section-label">randomize</div>
+        <label class="check-row"><input type="checkbox" id="chkColor" checked> color mode + palette</label>
+        <label class="check-row"><input type="checkbox" id="chkHue" checked> hue params</label>
+        <label class="check-row"><input type="checkbox" id="chkField" checked> field params</label>
+        <label class="check-row"><input type="checkbox" id="chkParticle" checked> particle params</label>
+        <label class="check-row"><input type="checkbox" id="chkBg" checked> background color</label>
+        <label class="check-row disabled">
+          <input type="checkbox" checked disabled>
+          seed <span style="font-size:9px;color:var(--text-dim);margin-left:2px">(always)</span>
+        </label>
+      </div>
+
+      <!-- Fixed Overrides -->
+      <details class="section">
+        <summary class="section-label">fixed overrides</summary>
+        <div class="override-fields">
+          <div class="ctrl">
+            <label>color mode</label>
+            <select id="ovColorMode">
+              <option value="">— random —</option>
+              <option value="angle">angle — flow direction</option>
+              <option value="position">position — x gradient</option>
+              <option value="age">age — particle lifetime</option>
+              <option value="curl">curl — turbulence</option>
+              <option value="speed">speed — noise value</option>
+            </select>
+          </div>
+          <div class="ctrl">
+            <label>palette</label>
+            <select id="ovPalette">
+              <option value="">— random —</option>
+              <option value="neon">neon</option>
+              <option value="fire">fire</option>
+              <option value="ocean">ocean</option>
+              <option value="sunset">sunset</option>
+              <option value="mono">mono</option>
+              <option value="split">split</option>
+            </select>
+          </div>
+          <div class="ctrl">
+            <label>noise scale <span style="font-size:9px;color:var(--text-dim)">(blank = random)</span></label>
+            <input type="number" id="ovNScale" min="100" max="1200" placeholder="e.g. 420">
+          </div>
+          <div class="ctrl">
+            <label>background color</label>
+            <div class="ctrl-row">
+              <input type="checkbox" id="ovBgEnable" style="accent-color:var(--accent);cursor:pointer;width:12px;height:12px;flex-shrink:0">
+              <input type="color" id="ovBgColor" value="#000000" style="flex:1;height:26px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;padding:2px 4px;">
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- Actions -->
+      <div class="actions">
+        <div class="btn-row">
+          <button class="primary" id="startBtn">generate batch</button>
+          <button id="cancelBtn" disabled>cancel</button>
+        </div>
+        <div class="btn-row">
+          <button class="export-btn" id="downloadAllBtn" disabled>download all ↓</button>
+        </div>
+      </div>
+
+    </div><!-- /config-scroll -->
+
+    <!-- Progress — always visible at bottom -->
+    <div id="progress-area">
+      <div id="progress-text">ready</div>
+      <div id="progress-bar-track">
+        <div id="progress-bar-fill"></div>
+      </div>
+    </div>
+  </div><!-- /config-panel -->
+
+  <!-- ── RIGHT GALLERY ── -->
+  <div id="gallery-col">
+    <div id="gallery-header">output gallery</div>
+    <div id="empty-state">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+        <rect x="4" y="10" width="44" height="34" rx="4" stroke="currentColor" stroke-width="2.5"/>
+        <path d="M4 26l12-10 9 7 9-12 14 13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      configure settings, then click generate batch
+    </div>
+    <div id="gallery"></div>
+  </div>
+
+</div>
+
+<script>
+// =========================================
+// ENGINE — adapted from color_flow_field.html
+// reads activeCfg / activeSeed instead of DOM
+// =========================================
+
+let activeCfg = {}, activeSeed = 0;
+
+function hash(x, y) { let n = Math.sin(x*127.1+y*311.7)*43758.5453; return n-(n|0); }
+function noise(x, y) {
+  const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
+  const s=fx*fx*(3-2*fx), t=fy*fy*(3-2*fy);
+  return hash(ix,iy)*(1-s)*(1-t)+hash(ix+1,iy)*s*(1-t)+hash(ix,iy+1)*(1-s)*t+hash(ix+1,iy+1)*s*t;
+}
+
+function fieldAngle(x, y, sc) {
+  const s = sc || activeCfg.nScale;
+  const oct = activeCfg.octaves | 0;
+  const mult = activeCfg.angleMult;
+  let n = noise(x/s + activeSeed, y/s + activeSeed + 7.3);
+  if (oct >= 2) n += 0.5  * noise(x/(s*0.5) + activeSeed + 31.7, y/(s*0.5) + activeSeed + 19.3);
+  if (oct >= 3) n += 0.25 * noise(x/(s*0.25) + activeSeed + 61.1, y/(s*0.25) + activeSeed + 47.9);
+  if (oct >= 4) n += 0.125* noise(x/(s*0.125)+ activeSeed + 91.3, y/(s*0.125)+ activeSeed + 83.7);
+  return n * Math.PI * mult;
+}
+
+function fieldCurl(x, y, sc) {
+  const e = sc ? 2*(sc/activeCfg.nScale) : 2;
+  const a1=fieldAngle(x+e,y,sc), a2=fieldAngle(x-e,y,sc), a3=fieldAngle(x,y+e,sc), a4=fieldAngle(x,y-e,sc);
+  return Math.abs((a1-a2)/(2*e)-(a3-a4)/(2*e));
+}
+
+const palettes = {
+  neon:  (t)      => `hsla(${(activeCfg.hOffset+t*activeCfg.hRange)%360},${activeCfg.sat}%,${activeCfg.lit}%,1)`,
+  fire:  (t)      => `hsla(${activeCfg.hOffset%360+t*Math.min(activeCfg.hRange,90)},${activeCfg.sat}%,${activeCfg.lit+t*20}%,1)`,
+  ocean: (t)      => `hsla(${(200+activeCfg.hOffset%60+t*Math.min(activeCfg.hRange,120))%360},${activeCfg.sat}%,${activeCfg.lit}%,1)`,
+  sunset:(t)      => { const s=[[15,90,55],[35,85,60],[55,70,55],[275,60,45]],i=Math.min(3,t*4|0),f=t*4-i,a=s[i],b=s[Math.min(3,i+1)]; return `hsla(${a[0]+(b[0]-a[0])*f},${a[1]}%,${a[2]}%,1)`; },
+  mono:  (t,curl) => curl>activeCfg.monoThresh?`hsla(${activeCfg.hOffset},${activeCfg.sat}%,${activeCfg.lit}%,1)`:`hsla(0,0%,${20+t*60}%,1)`,
+  split: (t)      => { const b=activeCfg.hOffset; return `hsla(${(t<0.5?b:(b+activeCfg.splitAngle+t*activeCfg.hRange*0.5))%360},${activeCfg.sat}%,${activeCfg.lit}%,1)`; },
+};
+
+function colorForParticle(p, W, H) {
+  const mode = activeCfg.colorMode;
+  const pal  = palettes[activeCfg.palette];
+  const angle = fieldAngle(p.x, p.y);
+  const curl  = fieldCurl(p.x, p.y) * activeCfg.curlAmp;
+  let t = 0;
+  if      (mode==='angle')    t = ((angle%(Math.PI*2))+Math.PI*2)%(Math.PI*2)/(Math.PI*2);
+  else if (mode==='position') { const θ=activeCfg.gradAngle*Math.PI/180; t = Math.max(0,Math.min(1, Math.cos(θ)*(p.x/W) + Math.sin(θ)*(p.y/H))); }
+  else if (mode==='age')      t = p.age / p.maxAge;
+  else if (mode==='curl')     t = Math.min(1, curl);
+  else if (mode==='speed')    { const cs=activeCfg.colorScale; t = noise(p.x/cs+activeSeed+100, p.y/cs+activeSeed+100); }
+  return pal(t, curl);
+}
+
+function makeParticle(W, H) {
+  return { x: Math.random()*W, y: Math.random()*H, age:0, maxAge: activeCfg.life+(Math.random()*activeCfg.lifeVar|0) };
+}
+
+function drawFrame(ctx, W, H, particles) {
+  const fade = activeCfg.fade;
+  if (fade > 0) { ctx.globalAlpha=fade/100; ctx.fillStyle=activeCfg.bgColor; ctx.fillRect(0,0,W,H); }
+  const step = activeCfg.step;
+  ctx.lineWidth = activeCfg.lineW;
+  for (const p of particles) {
+    const angle = fieldAngle(p.x, p.y);
+    const nx=p.x+Math.cos(angle)*step, ny=p.y+Math.sin(angle)*step;
+    ctx.globalAlpha = activeCfg.opa/100;
+    ctx.strokeStyle = colorForParticle(p, W, H);
+    ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(nx,ny); ctx.stroke();
+    p.x=nx; p.y=ny; p.age++;
+    if (p.age>p.maxAge||p.x<0||p.x>W||p.y<0||p.y>H) {
+      if (particles.length>(activeCfg.nPart|0)) particles.splice(particles.indexOf(p),1);
+      else { p.x=Math.random()*W; p.y=Math.random()*H; p.age=0; p.maxAge=activeCfg.life+(Math.random()*activeCfg.lifeVar|0); }
+    }
+  }
+  while (particles.length<(activeCfg.nPart|0)) particles.push(makeParticle(W, H));
+}
+
+// =========================================
+// RANDOMIZER
+// =========================================
+
+const COLOR_MODES = ['angle','position','age','curl','speed'];
+const PALETTES    = ['neon','fire','ocean','sunset','mono','split'];
+
+function randBetween(lo, hi, step) {
+  const steps = Math.round((hi - lo) / step);
+  return lo + Math.round(Math.random() * steps) * step;
+}
+function randPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function randomDarkColor() {
+  const h = Math.random() * 360;
+  const s = Math.random() * 25;
+  const l = Math.random() * 12;
+  const tmp = document.createElement('canvas');
+  tmp.width = tmp.height = 1;
+  const c = tmp.getContext('2d');
+  c.fillStyle = `hsl(${h},${s}%,${l}%)`;
+  c.fillRect(0,0,1,1);
+  const [r,g,b] = c.getImageData(0,0,1,1).data;
+  return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+function randomizeCfg(overrides, checks) {
+  const colorMode = overrides.colorMode || (checks.color ? randPick(COLOR_MODES) : 'angle');
+  const palette   = overrides.palette   || (checks.color ? randPick(PALETTES)    : 'neon');
+
+  return {
+    seed:       Math.random() * 9999,
+    colorMode,
+    palette,
+
+    hRange:     checks.hue ? randBetween(20, 360, 10)  : 240,
+    hOffset:    checks.hue ? randBetween(0,  360, 5)   : 180,
+    sat:        checks.hue ? randBetween(20, 100, 5)   : 80,
+    lit:        checks.hue ? randBetween(20, 80,  5)   : 55,
+
+    gradAngle:  colorMode === 'position' ? randBetween(0, 360, 5)     : 0,
+    colorScale: colorMode === 'speed'    ? randBetween(100, 1200, 50) : 420,
+    curlAmp:    colorMode === 'curl'     ? randBetween(1, 20, 0.5)    : 5,
+    monoThresh: palette   === 'mono'     ? randBetween(0.05, 1, 0.05) : 0.3,
+    splitAngle: palette   === 'split'    ? randBetween(10, 350, 5)    : 150,
+
+    nScale:     overrides.nScale != null ? overrides.nScale
+                : checks.field ? randBetween(100, 1200, 50) : 420,
+    angleMult:  checks.field ? randBetween(0.5, 8, 0.25)   : 4,
+    octaves:    checks.field ? (randBetween(1, 4, 1) | 0)  : 1,
+
+    nPart:      checks.particle ? randBetween(500, 4000, 100)  : 1800,
+    step:       checks.particle ? randBetween(1, 10, 0.5)      : 3,
+    lineW:      checks.particle ? randBetween(0.2, 3, 0.1)     : 0.9,
+    life:       checks.particle ? randBetween(30, 250, 5)      : 90,
+    lifeVar:    checks.particle ? randBetween(0, 150, 5)       : 40,
+    opa:        checks.particle ? randBetween(5, 55, 1)        : 15,
+    fade:       checks.particle ? randBetween(0, 8, 1)         : 0,
+
+    bgColor:    overrides.bgColor != null ? overrides.bgColor
+                : (checks.bg ? randomDarkColor() : '#000000'),
+  };
+}
+
+// =========================================
+// BATCH STATE MACHINE
+// =========================================
+
+const batch = {
+  state:        'IDLE',
+  queue:        [],
+  current:      0,
+  frameCount:   0,
+  targetFrames: 0,
+  particles:    [],
+  offCanvas:    null,
+  offCtx:       null,
+  W:            0,
+  H:            0,
+  results:      [],
+  cancelled:    false,
+  baseFrames:   200,
+  varFrames:    60,
+};
+
+function getResolution() {
+  const sel = document.getElementById('resPicker').value;
+  const map = { '1080sq':[1080,1080], '1080p':[1920,1080], '1440p':[2560,1440], '4k':[3840,2160] };
+  if (sel === 'custom') {
+    return [
+      Math.max(100, parseInt(document.getElementById('customW').value) || 1080),
+      Math.max(100, parseInt(document.getElementById('customH').value) || 1080),
+    ];
+  }
+  return map[sel];
+}
+
+function readCheckboxes() {
+  return {
+    color:    document.getElementById('chkColor').checked,
+    hue:      document.getElementById('chkHue').checked,
+    field:    document.getElementById('chkField').checked,
+    particle: document.getElementById('chkParticle').checked,
+    bg:       document.getElementById('chkBg').checked,
+  };
+}
+
+function readOverrides() {
+  const ov = {};
+  const cm  = document.getElementById('ovColorMode').value;
+  const pal = document.getElementById('ovPalette').value;
+  if (cm)  ov.colorMode = cm;
+  if (pal) ov.palette   = pal;
+  const ns = document.getElementById('ovNScale').value.trim();
+  if (ns)  ov.nScale = parseFloat(ns);
+  if (document.getElementById('ovBgEnable').checked) {
+    ov.bgColor = document.getElementById('ovBgColor').value;
+  }
+  return ov;
+}
+
+function startBatch() {
+  const count    = Math.max(1, Math.min(200, parseInt(document.getElementById('countInput').value) || 12));
+  const [W, H]   = getResolution();
+  const checks   = readCheckboxes();
+  const overrides = readOverrides();
+
+  // Clear previous results
+  batch.results.forEach(r => URL.revokeObjectURL(r.url));
+  batch.results = [];
+  document.getElementById('gallery').innerHTML = '';
+  document.getElementById('empty-state').style.display = 'none';
+
+  batch.queue      = Array.from({length: count}, () => randomizeCfg(overrides, checks));
+  batch.current    = 0;
+  batch.cancelled  = false;
+  batch.W          = W;
+  batch.H          = H;
+  batch.baseFrames = parseInt(document.getElementById('baseFrames').value) || 200;
+  batch.varFrames  = parseInt(document.getElementById('frameVar').value)   || 0;
+
+  batch.offCanvas        = document.getElementById('offscreen');
+  batch.offCanvas.width  = W;
+  batch.offCanvas.height = H;
+  batch.offCtx           = batch.offCanvas.getContext('2d');
+
+  updateUI('running');
+  batch.state = 'RENDERING';
+  beginCurrentImage();
+  requestAnimationFrame(batchLoop);
+}
+
+function beginCurrentImage() {
+  const cfg  = batch.queue[batch.current];
+  activeCfg  = cfg;
+  activeSeed = cfg.seed;
+
+  const variance    = Math.round((Math.random() * 2 - 1) * batch.varFrames);
+  batch.targetFrames = Math.max(10, batch.baseFrames + variance);
+  batch.frameCount   = 0;
+
+  batch.offCtx.globalAlpha = 1;
+  batch.offCtx.fillStyle   = cfg.bgColor;
+  batch.offCtx.fillRect(0, 0, batch.W, batch.H);
+
+  batch.particles = [];
+  const n = cfg.nPart | 0;
+  for (let i = 0; i < n; i++) batch.particles.push(makeParticle(batch.W, batch.H));
+}
+
+function batchLoop() {
+  if (batch.state !== 'RENDERING' || batch.cancelled) return;
+
+  // Adaptive burst: more frames per rAF for small/low-particle renders
+  const pixelM   = (batch.W * batch.H) / (1920 * 1080);
+  const partM    = activeCfg.nPart / 1800;
+  const burstSize = Math.max(1, Math.min(8, Math.round(4 / Math.max(0.2, pixelM * partM))));
+
+  for (let b = 0; b < burstSize; b++) {
+    if (batch.frameCount >= batch.targetFrames) break;
+    drawFrame(batch.offCtx, batch.W, batch.H, batch.particles);
+    batch.frameCount++;
+  }
+
+  updateProgress();
+
+  if (batch.frameCount >= batch.targetFrames) {
+    batch.state = 'CAPTURING';
+    captureCurrentImage();
+    return;
+  }
+
+  requestAnimationFrame(batchLoop);
+}
+
+function captureCurrentImage() {
+  const fmt  = document.getElementById('exportFmt').value;
+  const qual = parseInt(document.getElementById('exportQuality').value) / 100;
+
+  batch.offCanvas.toBlob(blob => {
+    if (batch.cancelled) return;
+    if (!blob) { advanceOrFinish(); return; }
+
+    const url    = URL.createObjectURL(blob);
+    const cfg    = batch.queue[batch.current];
+    const result = { blob, url, cfg, index: batch.current };
+    batch.results.push(result);
+    addThumbToGallery(result);
+    advanceOrFinish();
+  }, fmt, qual);
+}
+
+function advanceOrFinish() {
+  if (batch.cancelled) return;
+  batch.current++;
+  if (batch.current >= batch.queue.length) {
+    batch.state = 'DONE';
+    updateUI('done');
+  } else {
+    batch.state = 'RENDERING';
+    beginCurrentImage();
+    requestAnimationFrame(batchLoop);
+  }
+}
+
+function cancelBatch() {
+  batch.cancelled = true;
+  batch.state = 'IDLE';
+  updateUI('idle');
+}
+
+function updateProgress() {
+  const total    = batch.queue.length;
+  const done     = batch.current;
+  const framePct = batch.frameCount / batch.targetFrames;
+  const overall  = (done + framePct) / total;
+  document.getElementById('progress-bar-fill').style.width = (overall * 100).toFixed(1) + '%';
+  document.getElementById('progress-text').textContent =
+    `image ${done + 1} / ${total}  ·  frame ${batch.frameCount} / ${batch.targetFrames}`;
+}
+
+function updateUI(state) {
+  const startBtn       = document.getElementById('startBtn');
+  const cancelBtn      = document.getElementById('cancelBtn');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const progressText   = document.getElementById('progress-text');
+  const progressFill   = document.getElementById('progress-bar-fill');
+
+  if (state === 'running') {
+    startBtn.disabled       = true;
+    cancelBtn.disabled      = false;
+    downloadAllBtn.disabled = true;
+  } else if (state === 'done') {
+    startBtn.disabled       = false;
+    cancelBtn.disabled      = true;
+    downloadAllBtn.disabled = batch.results.length === 0;
+    const n = batch.results.length;
+    progressText.textContent = `done — ${n} image${n !== 1 ? 's' : ''} generated`;
+    progressFill.style.width = '100%';
+  } else {
+    startBtn.disabled       = false;
+    cancelBtn.disabled      = true;
+    downloadAllBtn.disabled = batch.results.length === 0;
+    if (state === 'idle') progressText.textContent = 'cancelled';
+  }
+}
+
+// =========================================
+// GALLERY + DOWNLOADS
+// =========================================
+
+function addThumbToGallery({ url, cfg, index }) {
+  const card = document.createElement('div');
+  card.className = 'thumb-card';
+
+  const img   = document.createElement('img');
+  img.src     = url;
+  img.loading = 'lazy';
+  img.alt     = `flow field ${index + 1}`;
+
+  const overlay  = document.createElement('div');
+  overlay.className = 'thumb-overlay';
+
+  const label = document.createElement('div');
+  label.className = 'thumb-label';
+  label.innerHTML = `#${index + 1}<br>${cfg.colorMode} / ${cfg.palette}`;
+
+  const dlBtn = document.createElement('button');
+  dlBtn.textContent = '↓';
+  dlBtn.className   = 'thumb-dl';
+  dlBtn.title       = 'download';
+  dlBtn.onclick     = (e) => { e.stopPropagation(); downloadOne(index); };
+
+  overlay.appendChild(label);
+  overlay.appendChild(dlBtn);
+  card.appendChild(img);
+  card.appendChild(overlay);
+  document.getElementById('gallery').appendChild(card);
+}
+
+function downloadOne(index) {
+  const r = batch.results[index];
+  if (!r) return;
+  const fmt = document.getElementById('exportFmt').value;
+  const ext = fmt === 'image/png' ? 'png' : fmt === 'image/jpeg' ? 'jpg' : 'webp';
+  const a   = document.createElement('a');
+  a.href    = URL.createObjectURL(r.blob);
+  a.download = `flow_field_${batch.W}x${batch.H}_${String(index+1).padStart(3,'0')}_${r.cfg.seed.toFixed(0)}.${ext}`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+function downloadAll() {
+  let i = 0;
+  function next() {
+    if (i >= batch.results.length) return;
+    downloadOne(i++);
+    setTimeout(next, 800);
+  }
+  next();
+}
+
+// =========================================
+// UI WIRING
+// =========================================
+
+['baseFrames','frameVar','exportQuality'].forEach(id => {
+  const el  = document.getElementById(id);
+  const vEl = document.getElementById(id + 'V');
+  el.addEventListener('input', () => { if (vEl) vEl.textContent = el.value; });
+});
+
+document.getElementById('exportFmt').addEventListener('change', function() {
+  document.getElementById('qualityCtrl').style.opacity = this.value === 'image/png' ? '0.35' : '1';
+});
+
+document.getElementById('resPicker').addEventListener('change', function() {
+  document.getElementById('customResRow').classList.toggle('show', this.value === 'custom');
+});
+
+document.getElementById('startBtn').onclick       = startBatch;
+document.getElementById('cancelBtn').onclick      = cancelBatch;
+document.getElementById('downloadAllBtn').onclick = downloadAll;
+</script>
+</body>
+</html>

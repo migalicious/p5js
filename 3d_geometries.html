@@ -6,110 +6,12 @@
 <title>3d geometries</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<link rel="stylesheet" href="shared.css">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg:        #0a0a0c;
-    --surface:   rgba(13, 13, 20, 0.92);
-    --surface2:  #1c1c24;
-    --border:    rgba(255,255,255,0.07);
-    --border2:   rgba(255,255,255,0.13);
-    --text:      #e8e8f0;
-    --text-muted:#7a7a90;
-    --text-dim:  #44445a;
-    --accent:    #7c6cfc;
-    --radius:    10px;
-    --font-ui:   'DM Sans', sans-serif;
-    --font-mono: 'DM Mono', monospace;
-    --panel-w:   300px;
-  }
-
-  html, body { width:100%; height:100%; overflow:hidden; background:#000; font-family:var(--font-ui); font-size:13px; color:var(--text); }
-
   #sketch-container { position:fixed; top:0; left:0; width:100%; height:100%; }
   #sketch-container canvas { display:block; width:100% !important; height:100% !important; }
 
-  #header {
-    position:fixed; top:16px; left:50%; transform:translateX(-50%);
-    display:flex; align-items:center; gap:10px; padding:6px 16px;
-    background:var(--surface); border:1px solid var(--border2); border-radius:999px;
-    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    z-index:10; pointer-events:none; white-space:nowrap;
-  }
-  #header h1 { font-family:var(--font-mono); font-size:12px; font-weight:300; letter-spacing:0.14em; color:var(--text-muted); }
-  #status { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); letter-spacing:0.05em; }
-
-  #toggle-panel {
-    position:fixed; top:16px; right:16px; z-index:20;
-    width:36px; height:36px; border-radius:50%;
-    border:1px solid var(--border2); background:var(--surface);
-    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    cursor:pointer; display:flex; align-items:center; justify-content:center;
-    transition:border-color 0.15s, background 0.15s; color:var(--text-muted);
-  }
-  #toggle-panel:hover { border-color:var(--accent); background:rgba(124,108,252,0.15); color:var(--text); }
-  #toggle-panel svg { pointer-events:none; }
-
-  #panel {
-    position:fixed; top:0; right:0; width:var(--panel-w); height:100%;
-    background:var(--surface); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-    border-left:1px solid var(--border2); z-index:15;
-    display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden;
-    transform:translateX(0); transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
-  }
-  #panel.hidden { transform:translateX(100%); }
-  #panel::-webkit-scrollbar { width:4px; }
-  #panel::-webkit-scrollbar-track { background:transparent; }
-  #panel::-webkit-scrollbar-thumb { background:var(--surface2); border-radius:2px; }
-
-  .panel-header { padding:60px 16px 12px; font-family:var(--font-mono); font-size:9px; letter-spacing:0.16em; color:var(--text-dim); text-transform:uppercase; border-bottom:1px solid var(--border); flex-shrink:0; }
-
-  .section { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:12px; }
-  .section-label { font-family:var(--font-mono); font-size:9px; letter-spacing:0.14em; color:var(--text-dim); text-transform:uppercase; }
-
-  .ctrl { display:flex; flex-direction:column; gap:5px; }
-  .ctrl label { font-size:10px; letter-spacing:0.07em; color:var(--text-muted); font-family:var(--font-mono); }
-  .ctrl-row { display:flex; align-items:center; gap:8px; }
-
-  input[type=range] {
-    flex:1; height:3px; -webkit-appearance:none; appearance:none;
-    background:var(--surface2); border-radius:2px; outline:none; cursor:pointer;
-  }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--text); border:none; cursor:pointer; transition:background 0.15s; }
-  input[type=range]:hover::-webkit-slider-thumb { background:var(--accent); }
-  input[type=range]::-moz-range-thumb { width:12px;height:12px;border-radius:50%;background:var(--text);border:none;cursor:pointer; }
-
-  .val { font-family:var(--font-mono); font-size:10px; color:var(--text-muted); min-width:36px; text-align:right; }
-
-  select {
-    width:100%; padding:5px 28px 5px 8px;
-    background:var(--surface2); border:1px solid var(--border2);
-    border-radius:6px; color:var(--text); font-family:var(--font-mono);
-    font-size:10px; letter-spacing:0.05em; cursor:pointer; outline:none;
-    -webkit-appearance:none; appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a7a90' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat:no-repeat; background-position:right 8px center;
-  }
-  select:focus { border-color:var(--accent); }
-
-  .actions { padding:14px 16px; display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
-  .btn-row { display:flex; gap:6px; }
-
-  button {
-    flex:1; padding:7px 10px; border-radius:7px;
-    border:1px solid var(--border2); background:var(--surface2); color:var(--text);
-    font-family:var(--font-mono); font-size:10px; letter-spacing:0.06em;
-    cursor:pointer; transition:border-color 0.15s, background 0.15s; text-transform:lowercase;
-  }
-  button:hover { border-color:var(--accent); background:rgba(124,108,252,0.12); }
-  button.primary { background:rgba(124,108,252,0.18); border-color:rgba(124,108,252,0.4); color:#b8afff; }
-  button.primary:hover { background:rgba(124,108,252,0.28); border-color:var(--accent); }
-  button#pauseBtn.active { background:rgba(252,108,180,0.15); border-color:rgba(252,108,180,0.4); color:#ffb0d8; }
-  button.export-btn { background:rgba(56,189,248,0.12); border-color:rgba(56,189,248,0.3); color:#7dd3fc; }
-  button.export-btn:hover { background:rgba(56,189,248,0.22); border-color:rgba(56,189,248,0.6); }
-
-  kbd { display:inline-block; font-family:var(--font-mono); font-size:9px; padding:1px 4px; border-radius:3px; background:rgba(255,255,255,0.06); border:1px solid var(--border2); color:var(--text-dim); margin-left:3px; }
+  .val { min-width:36px; }
 
   .shape-pills { display:flex; flex-wrap:wrap; gap:5px; }
   .pill {
@@ -173,12 +75,27 @@
       <div class="ctrl-row"><input type="range" id="fieldCount" min="3" max="60" value="18" step="1"><span class="val" id="fieldCountV">18</span></div>
     </div>
     <div class="ctrl field-only">
+      <label>motion mode</label>
+      <select id="motionMode">
+        <option value="drift">drift — shared direction</option>
+        <option value="bounce">bounce — dvd logo style</option>
+      </select>
+    </div>
+    <div class="ctrl field-only" id="driftSpeedCtrl">
       <label>drift speed</label>
       <div class="ctrl-row"><input type="range" id="driftSpeed" min="0.1" max="6" value="1.2" step="0.1"><span class="val" id="driftSpeedV">1.2</span></div>
     </div>
-    <div class="ctrl field-only">
+    <div class="ctrl field-only" id="driftDirCtrl">
       <label>drift direction °</label>
       <div class="ctrl-row"><input type="range" id="driftDir" min="0" max="360" value="225" step="5"><span class="val" id="driftDirV">225</span></div>
+    </div>
+    <div class="ctrl field-only" id="bounceSpeedCtrl" style="display:none">
+      <label>bounce speed</label>
+      <div class="ctrl-row"><input type="range" id="bounceSpeed" min="0.2" max="8" value="2" step="0.1"><span class="val" id="bounceSpeedV">2.0</span></div>
+    </div>
+    <div class="ctrl field-only" id="bounceSpeedVarCtrl" style="display:none">
+      <label>speed variance</label>
+      <div class="ctrl-row"><input type="range" id="bounceSpeedVar" min="0" max="1" value="0.4" step="0.05"><span class="val" id="bounceSpeedVarV">0.40</span></div>
     </div>
     <div class="ctrl field-only">
       <label>depth spread</label>
@@ -381,6 +298,8 @@ const getEllipZ       = pv('ellipZ');
 const getFieldCount   = pv('fieldCount');
 const getDriftSpeed   = pv('driftSpeed');
 const getDriftDir     = pv('driftDir');
+const getBounceSpeed  = pv('bounceSpeed');
+const getBounceSpeedVar = pv('bounceSpeedVar');
 const getDepthSpread  = pv('depthSpread');
 const getSizeVar      = pv('sizeVar');
 const getRotVar       = pv('rotVar');
@@ -417,6 +336,14 @@ function applyModeUI() {
 document.getElementById('displayMode').addEventListener('change', applyModeUI);
 document.getElementById('fieldShape').addEventListener('change', rebuildField);
 document.getElementById('fieldCount').addEventListener('input', rebuildField);
+document.getElementById('motionMode').addEventListener('change', () => {
+  const bounce = document.getElementById('motionMode').value === 'bounce';
+  document.getElementById('driftSpeedCtrl').style.display    = bounce ? 'none' : '';
+  document.getElementById('driftDirCtrl').style.display      = bounce ? 'none' : '';
+  document.getElementById('bounceSpeedCtrl').style.display   = bounce ? '' : 'none';
+  document.getElementById('bounceSpeedVarCtrl').style.display= bounce ? '' : 'none';
+  rebuildField();
+});
 applyModeUI();
 
 // ── panel / pause / fullscreen ────────────────────────────────────────────────
@@ -461,20 +388,27 @@ function makeParticle(colorIdx, total, shape, W, H, startOffscreen) {
 
   let px, py;
   if (startOffscreen) {
-    // spawn fully behind the leading edge so they enter naturally
     const along  = -(maxDim * 0.6 + Math.random() * maxDim * 0.8);
     const across = rs() * maxDim * 0.9;
     px = Math.cos(perpRad) * across + Math.cos(dirRad) * along;
     py = Math.sin(perpRad) * across + Math.sin(dirRad) * along;
   } else {
-    // on initial fill, scatter across the whole visible area
     px = rs() * W * 0.6;
     py = rs() * H * 0.6;
   }
 
+  // per-particle bounce velocity: random angle, speed with variance
+  const bSpd = getBounceSpeed();
+  const bVar = getBounceSpeedVar();
+  const bAngle = Math.random() * Math.PI * 2;
+  const bMult  = 0.6 + Math.random() * bVar;
+  const vx = Math.cos(bAngle) * bSpd * bMult;
+  const vy = Math.sin(bAngle) * bSpd * bMult;
+
   return {
     x: px, y: py,
     z: rs() * getDepthSpread(),
+    vx, vy,
     rotX: Math.random() * Math.PI * 2,
     rotY: Math.random() * Math.PI * 2,
     rotZ: Math.random() * Math.PI * 2,
@@ -608,22 +542,46 @@ new p5(sk => {
     } else {
       sk.camera(0, 0, getCamZ(), 0, 0, 0, 0, 1, 0);
 
+      const motionMode = document.getElementById('motionMode').value;
+      const W      = sk.width;
+      const H      = sk.height;
+      // p5 WEBGL canvas is centred — visible rect is ±W/2, ±H/2
+      const halfW  = W / 2;
+      const halfH  = H / 2;
+
+      // drift-mode shared velocity
       const dirRad = getDriftDir() * Math.PI / 180;
       const spd    = getDriftSpeed();
       const dx     = Math.cos(dirRad) * spd;
       const dy     = Math.sin(dirRad) * spd;
-      const W      = sk.width;
-      const H      = sk.height;
       const limit  = Math.max(W, H) * 0.9;
 
       fieldParticles.forEach((p, i) => {
-        // drift
-        p.x += dx;
-        p.y += dy;
+        if (motionMode === 'bounce') {
+          // scale live bounce speed — rescale vx/vy magnitude to match slider
+          const bSpd   = getBounceSpeed();
+          const curSpd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+          if (curSpd > 0.001) {
+            p.vx = (p.vx / curSpd) * bSpd * (0.6 + getBounceSpeedVar() * 0.4);
+            p.vy = (p.vy / curSpd) * bSpd * (0.6 + getBounceSpeedVar() * 0.4);
+          }
 
-        // check if past the far edge in drift direction
-        const dot = p.x * Math.cos(dirRad) + p.y * Math.sin(dirRad);
-        if (dot > limit) respawnParticle(p, W, H);
+          p.x += p.vx;
+          p.y += p.vy;
+
+          // bounce off edges — use a margin based on shape size so they don't clip
+          const margin = sz * p.sizeMult * 0.6;
+          if (p.x > halfW - margin)  { p.x = halfW - margin;  p.vx *= -1; }
+          if (p.x < -halfW + margin) { p.x = -halfW + margin; p.vx *= -1; }
+          if (p.y > halfH - margin)  { p.y = halfH - margin;  p.vy *= -1; }
+          if (p.y < -halfH + margin) { p.y = -halfH + margin; p.vy *= -1; }
+        } else {
+          // drift
+          p.x += dx;
+          p.y += dy;
+          const dot = p.x * Math.cos(dirRad) + p.y * Math.sin(dirRad);
+          if (dot > limit) respawnParticle(p, W, H);
+        }
 
         // spin
         const rMult = 1 + rotSpd * 4;
