@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>islands</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #sketch-container { position:fixed; top:0; left:0; width:100%; height:100%; }
+  #sketch-container canvas { display:block; width:100% !important; height:100% !important; }
+</style>
+</head>
+<body>
+
+<div id="sketch-container"></div>
+
+<div id="header">
+  <h1>islands</h1>
+  <span id="status">● building</span>
+</div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <!-- TERRAIN -->
+  <div class="section">
+    <div class="section-label">terrain</div>
+    <div class="ctrl">
+      <label>resolution</label>
+      <select id="resolution">
+        <option value="300">low — 300 (fast)</option>
+        <option value="500" selected>medium — 500</option>
+        <option value="700">high — 700 (slow)</option>
+        <option value="1000">ultra — 1000 (original)</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>noise scale</label>
+      <div class="ctrl-row"><input type="range" id="noiseDelta" min="0.003" max="0.06" value="0.015" step="0.001"><span class="val" id="noiseDeltaV">0.015</span></div>
+    </div>
+    <div class="ctrl"><label>terrain height</label>
+      <div class="ctrl-row"><input type="range" id="terrainHeight" min="10" max="200" value="60" step="5"><span class="val" id="terrainHeightV">60</span></div>
+    </div>
+    <div class="ctrl"><label>island falloff</label>
+      <div class="ctrl-row"><input type="range" id="falloffPower" min="0.01" max="0.5" value="0.075" step="0.005"><span class="val" id="falloffPowerV">0.075</span></div>
+    </div>
+    <div class="ctrl"><label>octaves — detail layers</label>
+      <div class="ctrl-row"><input type="range" id="octaves" min="1" max="8" value="5" step="1"><span class="val" id="octavesV">5</span></div>
+    </div>
+    <div class="ctrl"><label>seed</label>
+      <div class="ctrl-row"><input type="range" id="seed" min="0" max="9999" value="0" step="1"><span class="val" id="seedV">0</span></div>
+    </div>
+  </div>
+
+  <!-- BIOMES -->
+  <div class="section">
+    <div class="section-label">biomes</div>
+    <div class="ctrl"><label>water level</label>
+      <div class="ctrl-row"><input type="range" id="threshWater" min="0.15" max="0.65" value="0.40" step="0.01"><span class="val" id="threshWaterV">0.40</span></div>
+    </div>
+    <div class="ctrl"><label>sand band</label>
+      <div class="ctrl-row"><input type="range" id="threshSand" min="0.2" max="0.7" value="0.45" step="0.01"><span class="val" id="threshSandV">0.45</span></div>
+    </div>
+    <div class="ctrl"><label>grass / snow line</label>
+      <div class="ctrl-row"><input type="range" id="threshGrass" min="0.35" max="0.95" value="0.65" step="0.01"><span class="val" id="threshGrassV">0.65</span></div>
+    </div>
+  </div>
+
+  <!-- COLORS -->
+  <div class="section">
+    <div class="section-label">colors <span style="font-size:9px;color:var(--text-dim)">(sky is live)</span></div>
+    <div class="ctrl">
+      <label>sky</label>
+      <input type="color" id="colorSky" value="#8cc8f0" style="width:100%;height:28px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;padding:2px 4px;">
+    </div>
+    <div class="ctrl">
+      <label>water</label>
+      <input type="color" id="colorWater" value="#28a0e6" style="width:100%;height:28px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;padding:2px 4px;">
+    </div>
+    <div class="ctrl">
+      <label>snow / peaks</label>
+      <input type="color" id="colorSnow" value="#ffffff" style="width:100%;height:28px;border-radius:6px;border:1px solid var(--border2);background:none;cursor:pointer;padding:2px 4px;">
+    </div>
+  </div>
+
+  <!-- TREES -->
+  <div class="section">
+    <div class="section-label">trees</div>
+    <div class="ctrl"><label>tree count</label>
+      <div class="ctrl-row"><input type="range" id="treeCount" min="0" max="600" value="150" step="10"><span class="val" id="treeCountV">150</span></div>
+    </div>
+    <div class="ctrl"><label>branch depth</label>
+      <div class="ctrl-row"><input type="range" id="treeDepth" min="1" max="8" value="5" step="1"><span class="val" id="treeDepthV">5</span></div>
+    </div>
+  </div>
+
+  <!-- VIEW -->
+  <div class="section">
+    <div class="section-label">view <span style="font-size:9px;color:var(--text-dim)">(live — drag to orbit)</span></div>
+    <div class="ctrl"><label>rotation speed</label>
+      <div class="ctrl-row"><input type="range" id="rotSpeed" min="-0.008" max="0.008" value="0.002" step="0.0005"><span class="val" id="rotSpeedV">0.002</span></div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="actions">
+    <div class="btn-row">
+      <button class="primary" id="regenBtn">generate<kbd>n</kbd></button>
+      <button id="pauseBtn">pause<kbd>space</kbd></button>
+    </div>
+    <div class="btn-row">
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+      <button class="export-btn" id="exportBtn">save PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── slider param helper ───────────────────────────────────────────────
+function pv(id) {
+  const el = document.getElementById(id);
+  const dsp = document.getElementById(id + 'V');
+  if (dsp) {
+    const fmt = v => parseFloat(el.step) < 0.01 ? parseFloat(v).toFixed(3)
+                   : parseFloat(el.step) < 1    ? parseFloat(v).toFixed(3)
+                   : v;
+    dsp.textContent = fmt(el.value);
+    el.addEventListener('input', () => { dsp.textContent = fmt(el.value); });
+  }
+  return () => parseFloat(el.value);
+}
+
+const getNoiseDelta  = pv('noiseDelta');
+const getTerrainH    = pv('terrainHeight');
+const getFalloff     = pv('falloffPower');
+const getOctaves     = pv('octaves');
+const getSeed        = pv('seed');
+const getThreshWater = pv('threshWater');
+const getThreshSand  = pv('threshSand');
+const getThreshGrass = pv('threshGrass');
+const getTreeCount   = pv('treeCount');
+const getTreeDepth   = pv('treeDepth');
+const getRotSpeed    = pv('rotSpeed');
+
+function hexToRgb(hex) {
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+// ── panel / keyboard ──────────────────────────────────────────────────
+const panel     = document.getElementById('panel');
+const statusEl  = document.getElementById('status');
+const pauseBtn  = document.getElementById('pauseBtn');
+
+document.getElementById('toggle-panel').addEventListener('click', () => panel.classList.toggle('hidden'));
+document.getElementById('fullscreenBtn').addEventListener('click', () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
+
+let paused = false;
+pauseBtn.addEventListener('click', () => {
+  paused = !paused;
+  pauseBtn.classList.toggle('active', paused);
+  pauseBtn.innerHTML = (paused ? 'resume' : 'pause') + '<kbd>space</kbd>';
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); pauseBtn.click(); }
+  if (e.key === 'n' || e.key === 'N') document.getElementById('regenBtn').click();
+  if (e.key === 'f' || e.key === 'F') document.getElementById('fullscreenBtn').click();
+});
+
+document.getElementById('regenBtn').addEventListener('click', () => {
+  if (window._sketchRegen) window._sketchRegen();
+});
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (window._sketchExport) window._sketchExport();
+});
+
+// ── p5 sketch ─────────────────────────────────────────────────────────
+new p5(function(p) {
+  // performance constants
+  const BUILD_STEP_Y    = 20;
+  const SPARKLE_CHANCE  = 0.02;
+  const TREE_DENSITY_STEP = 10;
+  const COLOR_CACHE_RES = 1000;
+  const COLOR_SAND_WET   = [140, 110,  80];
+  const COLOR_SAND_DRY   = [190, 160, 110];
+  const COLOR_GRASS_DEEP = [ 50, 120,  60];
+  const COLOR_GRASS_PALE = [110, 160,  90];
+  const COLOR_SPARKLE    = [255, 255, 255];
+  const COLOR_TREE_START = [ 90,  60,  40];
+  const COLOR_TREE_END   = [ 50, 120,  60];
+
+  // state rebuilt on each regen
+  let worldSize, radius, seaSize;
+  let terrain = [], terrainModels = [], treeModels = [];
+  let colorCache = [], treeColorCache = [];
+  let waterModel = null;
+  let buildProcess = null;
+  let building = false;
+
+  // expose controls to outer script
+  window._sketchRegen  = () => startBuild();
+  window._sketchExport = () => p.saveCanvas('islands', 'png');
+
+  p.setup = function() {
+    const cnv = p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
+    cnv.parent('sketch-container');
+    p.perspective(p.PI / 3, p.width / p.height, 0.1, 10000);
+    p.noStroke();
+    startBuild();
+  };
+
+  p.windowResized = function() {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+    p.perspective(p.PI / 3, p.width / p.height, 0.1, 10000);
+  };
+
+  // ── build ───────────────────────────────────────────────────────────
+  function startBuild() {
+    // clear old geometry
+    terrain = []; terrainModels = []; treeModels = [];
+    colorCache = []; treeColorCache = [];
+    waterModel = null;
+    building = true;
+    statusEl.textContent = '● building';
+
+    // snapshot params
+    worldSize = parseInt(document.getElementById('resolution').value);
+    radius    = worldSize / 2;
+    seaSize   = worldSize * 6;
+
+    const noiseDelta   = getNoiseDelta();
+    const terrainH     = getTerrainH();
+    const falloffPower = getFalloff();
+    const octaves      = Math.round(getOctaves());
+    const seed         = Math.round(getSeed());
+    const threshWater  = getThreshWater();
+    const threshSand   = Math.max(threshWater + 0.01, getThreshSand());
+    const threshGrass  = Math.max(threshSand  + 0.01, getThreshGrass());
+    const treeCount    = Math.round(getTreeCount());
+    const treeDepth    = Math.round(getTreeDepth());
+    const colorWater   = hexToRgb(document.getElementById('colorWater').value);
+    const colorSnow    = hexToRgb(document.getElementById('colorSnow').value);
+
+    p.noiseSeed(seed);
+    p.randomSeed(seed);
+    p.noiseDetail(octaves, 0.5);
+
+    // precompute terrain color cache
+    for (let i = 0; i <= COLOR_CACHE_RES; i++) {
+      const n = i / COLOR_CACHE_RES;
+      let col;
+      if (n <= threshWater) {
+        col = p.color(...colorWater);
+      } else if (n <= threshSand) {
+        const t = p.map(n, threshWater, threshSand, 0, 1);
+        col = p.lerpColor(p.color(...COLOR_SAND_WET), p.color(...COLOR_SAND_DRY), t);
+      } else if (n < threshGrass) {
+        const t = p.map(n, threshSand, threshGrass, 0, 1);
+        col = p.lerpColor(p.color(...COLOR_GRASS_DEEP), p.color(...COLOR_GRASS_PALE), t);
+      } else {
+        col = p.color(...colorSnow);
+      }
+      colorCache[i] = col;
+    }
+
+    // precompute tree color cache
+    const cStart = p.color(...COLOR_TREE_START);
+    const cEnd   = p.color(...COLOR_TREE_END);
+    for (let d = 0; d <= treeDepth; d++) {
+      treeColorCache[d] = p.lerpColor(cStart, cEnd, 1 - d / treeDepth);
+    }
+
+    // generate terrain data synchronously (fast enough for any resolution)
+    const center = worldSize / 2;
+    for (let x = 0; x < worldSize; ++x) {
+      terrain[x] = [];
+      for (let y = 0; y < worldSize; ++y) {
+        const dx = x - center, dy = y - center;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        if (d <= radius) {
+          const nRaw   = p.noise(x * noiseDelta, y * noiseDelta);
+          const falloff = Math.pow(1 - d / radius, falloffPower);
+          const n      = nRaw * falloff;
+          terrain[x][y] = { z: p.map(n, threshWater, 0.8, 0, terrainH), n };
+        } else {
+          terrain[x][y] = null;
+        }
+      }
+    }
+
+    buildProcess = worldGeneratorFn(threshWater, threshSand, threshGrass, treeCount, treeDepth, colorWater);
+  }
+
+  function getCachedColor(n) {
+    return colorCache[p.constrain(Math.floor(n * COLOR_CACHE_RES), 0, COLOR_CACHE_RES)];
+  }
+
+  function* worldGeneratorFn(threshWater, threshSand, threshGrass, treeCount, treeDepth, colorWater) {
+    const WATER_LEVEL = 0;
+
+    waterModel = p.buildGeometry(() => {
+      p.fill(...colorWater);
+      const off = (seaSize - worldSize) / 2;
+      p.beginShape();
+      p.vertex(-off,             -off,             WATER_LEVEL);
+      p.vertex(worldSize + off,  -off,             WATER_LEVEL);
+      p.vertex(worldSize + off,  worldSize + off,  WATER_LEVEL);
+      p.vertex(-off,             worldSize + off,  WATER_LEVEL);
+      p.endShape(p.CLOSE);
+    });
+    yield;
+
+    for (let y = 0; y < worldSize - 1; y += BUILD_STEP_Y) {
+      const yEnd = Math.min(y + BUILD_STEP_Y, worldSize - 1);
+      terrainModels.push(p.buildGeometry(() => buildTerrainChunk(y, yEnd, WATER_LEVEL)));
+      yield;
+    }
+
+    const batches = 4;
+    for (let i = 0; i < batches; i++) {
+      treeModels.push(p.buildGeometry(() => buildTreesBatch(i, batches, WATER_LEVEL, threshSand, threshGrass, treeCount, treeDepth)));
+      yield;
+    }
+
+    building = false;
+    statusEl.textContent = '● live';
+  }
+
+  function buildTerrainChunk(yStart, yEnd, WATER_LEVEL) {
+    for (let y = yStart; y < yEnd; y++) {
+      p.beginShape(p.TRIANGLES);
+      for (let x = 0; x < worldSize - 1; x++) {
+        const t1 = terrain[x][y], t2 = terrain[x+1][y],
+              t3 = terrain[x][y+1], t4 = terrain[x+1][y+1];
+        if (!t1 || !t2 || !t3 || !t4) continue;
+
+        if (t1.z <= WATER_LEVEL && t2.z <= WATER_LEVEL && t3.z <= WATER_LEVEL && t4.z <= WATER_LEVEL) {
+          if (p.random(1) < SPARKLE_CHANCE) {
+            const s = 0.5, sz = WATER_LEVEL + 0.1;
+            p.fill(...COLOR_SPARKLE);
+            p.vertex(x, y - s, sz); p.vertex(x - s, y + s, sz); p.vertex(x + s, y + s, sz);
+          }
+          continue;
+        }
+
+        p.fill(getCachedColor(t1.n)); p.vertex(x,   y,   t1.z);
+        p.fill(getCachedColor(t2.n)); p.vertex(x+1, y,   t2.z);
+        p.fill(getCachedColor(t3.n)); p.vertex(x,   y+1, t3.z);
+        p.fill(getCachedColor(t2.n)); p.vertex(x+1, y,   t2.z);
+        p.fill(getCachedColor(t4.n)); p.vertex(x+1, y+1, t4.z);
+        p.fill(getCachedColor(t3.n)); p.vertex(x,   y+1, t3.z);
+      }
+      p.endShape();
+    }
+  }
+
+  function buildTreesBatch(batchIdx, totalBatches, WATER_LEVEL, threshSand, threshGrass, treeCount, treeDepth) {
+    const center = worldSize / 2;
+    const rSqCut = (radius - 20) * (radius - 20);
+    const positions = [];
+    for (let y = 0; y < worldSize; y += TREE_DENSITY_STEP) {
+      for (let x = 0; x < worldSize; x += TREE_DENSITY_STEP) {
+        const t = terrain[x] && terrain[x][y];
+        if (t && t.z > WATER_LEVEL + 5) {
+          const dx = x - center, dy = y - center;
+          if (dx*dx + dy*dy < rSqCut && t.n > threshSand && t.n < threshGrass) {
+            if ((x + y) % (TREE_DENSITY_STEP * totalBatches) === batchIdx * TREE_DENSITY_STEP) {
+              positions.push(p.createVector(x, y, t.z));
+            }
+          }
+        }
+      }
+    }
+    const treesPerBatch = treeCount / totalBatches;
+    for (let i = 0; i < treesPerBatch && positions.length > 0; i++) {
+      const idx = Math.floor(p.random(positions.length));
+      const pos = positions.splice(idx, 1)[0];
+      p.push(); p.translate(pos); branch(treeDepth); p.pop();
+    }
+  }
+
+  function branch(depth) {
+    const len = 16 * (worldSize / 1000);
+    p.translate(0, 0, len / 2);
+    p.fill(treeColorCache[depth]);
+    p.box(1, 1, len);
+    if (depth === 0) return;
+    p.translate(0, 0, len / 2);
+    p.scale(0.7);
+    for (let i = 0; i < 3; i++) {
+      p.push();
+      p.rotateX(p.random(-0.7, 0.7));
+      p.rotateY(p.random(-0.7, 0.7));
+      p.rotateZ(p.random(p.TWO_PI));
+      branch(depth - 1);
+      p.pop();
+    }
+  }
+
+  // ── draw ────────────────────────────────────────────────────────────
+  p.draw = function() {
+    if (paused && !building) return;
+
+    const sky = hexToRgb(document.getElementById('colorSky').value);
+    p.background(...sky);
+    p.orbitControl();
+
+    if (buildProcess) buildProcess.next();
+
+    p.scale(1.25);
+    p.rotateX(1.25);
+    p.rotateZ(p.frameCount * getRotSpeed());
+
+    p.push();
+    p.translate(-worldSize / 2, -worldSize / 2, 0);
+    if (waterModel) p.model(waterModel);
+    for (const m of terrainModels) p.model(m);
+    for (const t of treeModels)    p.model(t);
+    p.pop();
+  };
+}, 'sketch-container');
+</script>
+</body>
+</html>

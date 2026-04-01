@@ -242,7 +242,7 @@
         <div class="ctrl">
           <label>base frames</label>
           <div class="ctrl-row">
-            <input type="range" id="baseFrames" min="50" max="600" value="200" step="10">
+            <input type="range" id="baseFrames" min="50" max="6000" value="200" step="50">
             <span class="val" id="baseFramesV">200</span>
           </div>
         </div>
@@ -317,6 +317,10 @@
           <div class="ctrl">
             <label>noise scale <span style="font-size:9px;color:var(--text-dim)">(blank = random)</span></label>
             <input type="number" id="ovNScale" min="100" max="1200" placeholder="e.g. 420">
+          </div>
+          <div class="ctrl">
+            <label>bg fade — trail <span style="font-size:9px;color:var(--text-dim)">(blank = random)</span></label>
+            <input type="number" id="ovFade" min="0" max="15" placeholder="e.g. 0">
           </div>
           <div class="ctrl">
             <label>background color</label>
@@ -501,7 +505,8 @@ function randomizeCfg(overrides, checks) {
     life:       checks.particle ? randBetween(30, 250, 5)      : 90,
     lifeVar:    checks.particle ? randBetween(0, 150, 5)       : 40,
     opa:        checks.particle ? randBetween(5, 55, 1)        : 15,
-    fade:       checks.particle ? randBetween(0, 8, 1)         : 0,
+    fade:       overrides.fade != null ? overrides.fade
+                : checks.particle ? randBetween(0, 8, 1)       : 0,
 
     bgColor:    overrides.bgColor != null ? overrides.bgColor
                 : (checks.bg ? randomDarkColor() : '#000000'),
@@ -559,6 +564,8 @@ function readOverrides() {
   if (pal) ov.palette   = pal;
   const ns = document.getElementById('ovNScale').value.trim();
   if (ns)  ov.nScale = parseFloat(ns);
+  const fd = document.getElementById('ovFade').value.trim();
+  if (fd !== '')  ov.fade = parseFloat(fd);
   if (document.getElementById('ovBgEnable').checked) {
     ov.bgColor = document.getElementById('ovBgColor').value;
   }
