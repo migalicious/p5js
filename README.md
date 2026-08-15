@@ -82,11 +82,11 @@ open color_flow_field.html
 
 ## Blender experiments
 
-The [Blender prototypes](blender/README.md) turn the sketches' generative rules
-into editable scenes and geometry. Flow Field Painter includes an installable
-Blender sidebar: invisible seeded paths deposit separate paint marks across a
-three-dimensional canvas, with presets and controls for flow, spacing, brush
-shape, opacity, materials, and camera.
+The [Generative Art Lab for Blender](blender/README.md) turns the sketches'
+rules into editable scenes and geometry. One installable sidebar now includes
+the surface Flow Painter, 3D L-system sculptures, and dense Clifford, De Jong,
+and Lorenz strange-attractor point art. Each has presets, seeds, mutation,
+plain-language controls, full-result generation, rendering, and JSON recipes.
 
 ## Thumbnails
 

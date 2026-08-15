@@ -118,6 +118,13 @@ def remove_live_generation(scene: bpy.types.Scene) -> None:
         return
 
     objects = list(collection.all_objects)
+    object_data = [(obj.type, obj.data) for obj in objects if obj.data is not None]
+    node_groups = {
+        modifier.node_group
+        for obj in objects
+        for modifier in obj.modifiers
+        if modifier.type == "NODES" and modifier.node_group is not None
+    }
     materials = {
         slot.material
         for obj in objects
@@ -130,6 +137,20 @@ def remove_live_generation(scene: bpy.types.Scene) -> None:
     for obj in objects:
         bpy.data.objects.remove(obj, do_unlink=True)
     bpy.data.collections.remove(collection)
+
+    data_collections = {
+        "MESH": bpy.data.meshes,
+        "CURVE": bpy.data.curves,
+        "CAMERA": bpy.data.cameras,
+        "LIGHT": bpy.data.lights,
+    }
+    for object_type, datablock in object_data:
+        owner = data_collections.get(object_type)
+        if owner is not None and datablock.users == 0:
+            owner.remove(datablock)
+    for node_group in node_groups:
+        if node_group.users == 0:
+            bpy.data.node_groups.remove(node_group)
 
     for material in materials:
         if material.users == 0:

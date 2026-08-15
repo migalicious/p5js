@@ -13,15 +13,16 @@ from bpy.types import Operator, Panel, PropertyGroup
 
 from .generator import FlowSettings, build as build_flow, freeze_current_frame
 from .lsystem import LSystemSettings, build as build_lsystem
+from .attractor import AttractorSettings, build as build_attractor
 
 
 bl_info = {
     "name": "Generative Art Lab",
     "author": "migalicious",
-    "version": (0, 4, 0),
+    "version": (0, 5, 0),
     "blender": (5, 2, 0),
     "location": "3D Viewport > Sidebar > Generative Art",
-    "description": "Tweak and render seeded flow paintings and L-system sculptures",
+    "description": "Tweak and render seeded flow paintings, L-systems, and strange attractors",
     "category": "3D View",
 }
 
@@ -37,6 +38,7 @@ PALETTE_ITEMS = (
 GENERATOR_ITEMS = (
     ("FLOW", "Surface Flow Painter", "Deposit disconnected marks along invisible paths on an object"),
     ("LSYSTEM", "L-System Sculpture", "Grow seeded branching structures from rewriting rules"),
+    ("ATTRACTOR", "Strange Attractor", "Accumulate a dense image from a repeated mathematical orbit"),
 )
 
 PRESET_ITEMS = (
@@ -58,6 +60,33 @@ LSYSTEM_PRESET_ITEMS = (
     ("FERN", "Fern", "Nested asymmetric fronds"),
     ("CORAL", "Coral", "Dense repeated branching in many directions"),
     ("SNOWFLAKE", "Snowflake", "Planar Koch snowflake from the original sketch"),
+)
+
+ATTRACTOR_PRESET_ITEMS = (
+    ("CLIFFORD_RIBBONS", "Clifford Ribbons", "The layered Clifford form from the p5.js sketch"),
+    ("CLIFFORD_WINGS", "Clifford Wings", "A broad bilateral Clifford structure"),
+    ("DEJONG_LACE", "De Jong Lace", "Fine woven arcs with open pockets"),
+    ("LORENZ", "Lorenz Butterfly", "The classic two-lobed chaotic orbit"),
+)
+
+ATTRACTOR_TYPE_ITEMS = (
+    ("CLIFFORD", "Clifford", "Sine and cosine orbit with four coefficients"),
+    ("DEJONG", "De Jong", "Peter de Jong sine and cosine orbit"),
+    ("LORENZ", "Lorenz", "Three-dimensional differential system shown as x versus z"),
+)
+
+ATTRACTOR_COLOR_ITEMS = (
+    ("CONSTANT", "One Color Band", "Use the middle palette color everywhere"),
+    ("POSITION", "Position", "Color points according to where they land"),
+    ("ITERATION", "Orbit Age", "Color points from early to late in the calculation"),
+    ("SPEED", "Movement Speed", "Color fast and slow parts of the orbit differently"),
+)
+
+ATTRACTOR_DEPTH_ITEMS = (
+    ("FLAT", "Flat Image", "Stay faithful to the original two-dimensional point drawing"),
+    ("ITERATION", "Orbit Age", "Push early and late points to different depths"),
+    ("SPEED", "Movement Speed", "Use local orbit speed as depth"),
+    ("WAVE", "Ribbon Fold", "Fold the point drawing into a seeded wave"),
 )
 
 
@@ -291,6 +320,45 @@ class FLOWFIELD_PG_settings(PropertyGroup):
         subtype="FACTOR",
     )
     lsystem_camera_lens: FloatProperty(name="Sculpture Camera Lens", default=58.0, min=18.0, max=150.0)
+    attractor_preset: EnumProperty(name="Starting Orbit", items=ATTRACTOR_PRESET_ITEMS, default="CLIFFORD_RIBBONS")
+    attractor_type: EnumProperty(name="Equation", items=ATTRACTOR_TYPE_ITEMS, default="CLIFFORD")
+    attractor_iterations: IntProperty(
+        name="Points",
+        description="How long the orbit paints; more points produce denser structures and take more memory",
+        default=180_000,
+        min=5_000,
+        max=1_000_000,
+    )
+    attractor_a: FloatProperty(name="Coefficient A", default=-1.7, min=-3.0, max=3.0, precision=3)
+    attractor_b: FloatProperty(name="Coefficient B", default=1.8, min=-3.0, max=3.0, precision=3)
+    attractor_c: FloatProperty(name="Coefficient C", default=-1.9, min=-3.0, max=3.0, precision=3)
+    attractor_d: FloatProperty(name="Coefficient D", default=0.4, min=-3.0, max=3.0, precision=3)
+    attractor_color_mode: EnumProperty(name="Color From", items=ATTRACTOR_COLOR_ITEMS, default="POSITION")
+    attractor_depth_mode: EnumProperty(name="Depth From", items=ATTRACTOR_DEPTH_ITEMS, default="FLAT")
+    attractor_depth_amount: FloatProperty(
+        name="Depth Amount",
+        description="Distance between the front and back of non-flat point structures",
+        default=1.8,
+        min=0.0,
+        max=8.0,
+    )
+    attractor_point_size: FloatProperty(
+        name="Point Size",
+        description="Rendered radius of every deposited point",
+        default=0.018,
+        min=0.002,
+        max=0.12,
+        precision=4,
+    )
+    attractor_opacity: FloatProperty(
+        name="Point Opacity",
+        description="Low opacity lets dense portions build up gradually like the p5.js canvas",
+        default=0.16,
+        min=0.02,
+        max=1.0,
+        subtype="FACTOR",
+    )
+    attractor_camera_lens: FloatProperty(name="Attractor Camera Lens", default=54.0, min=18.0, max=150.0)
     status: StringProperty(name="Status", default="Ready for a first generation")
 
 
@@ -349,7 +417,33 @@ def lsystem_settings_from_scene(scene: bpy.types.Scene) -> LSystemSettings:
     )
 
 
-def settings_from_scene(scene: bpy.types.Scene) -> FlowSettings | LSystemSettings:
+def attractor_settings_from_scene(scene: bpy.types.Scene) -> AttractorSettings:
+    props = scene.flow_field_settings
+    return AttractorSettings(
+        seed=props.seed,
+        attractor_type=props.attractor_type,
+        iterations=props.attractor_iterations,
+        a=props.attractor_a,
+        b=props.attractor_b,
+        c=props.attractor_c,
+        d=props.attractor_d,
+        color_mode=props.attractor_color_mode,
+        depth_mode=props.attractor_depth_mode,
+        depth_amount=props.attractor_depth_amount,
+        point_size=props.attractor_point_size,
+        opacity=props.attractor_opacity,
+        palette=props.palette,
+        metallic=props.metallic,
+        roughness=props.roughness,
+        emission_strength=props.emission_strength,
+        camera_lens=props.attractor_camera_lens,
+        render_size=props.render_size,
+    )
+
+
+def settings_from_scene(scene: bpy.types.Scene) -> FlowSettings | LSystemSettings | AttractorSettings:
+    if scene.flow_field_settings.generator_type == "ATTRACTOR":
+        return attractor_settings_from_scene(scene)
     if scene.flow_field_settings.generator_type == "LSYSTEM":
         return lsystem_settings_from_scene(scene)
     return flow_settings_from_scene(scene)
@@ -368,7 +462,10 @@ def generate_artwork(context: bpy.types.Context) -> None:
     scene = context.scene
     props = scene.flow_field_settings
     settings = settings_from_scene(scene)
-    if props.generator_type == "LSYSTEM":
+    if props.generator_type == "ATTRACTOR":
+        build_attractor(scene, settings)
+        noun = "attractor"
+    elif props.generator_type == "LSYSTEM":
         build_lsystem(scene, settings)
         noun = "sculpture"
     else:
@@ -522,8 +619,63 @@ def apply_lsystem_preset(props: FLOWFIELD_PG_settings) -> None:
         setattr(props, name, value)
 
 
+def apply_attractor_preset(props: FLOWFIELD_PG_settings) -> None:
+    if props.attractor_preset == "CLIFFORD_WINGS":
+        values = {
+            "attractor_type": "CLIFFORD",
+            "attractor_a": -1.4,
+            "attractor_b": 1.6,
+            "attractor_c": 1.0,
+            "attractor_d": 0.7,
+            "attractor_color_mode": "POSITION",
+            "attractor_depth_mode": "WAVE",
+            "attractor_depth_amount": 1.4,
+            "palette": "TIDAL",
+        }
+    elif props.attractor_preset == "DEJONG_LACE":
+        values = {
+            "attractor_type": "DEJONG",
+            "attractor_a": -2.24,
+            "attractor_b": 0.43,
+            "attractor_c": -0.65,
+            "attractor_d": -2.43,
+            "attractor_color_mode": "SPEED",
+            "attractor_depth_mode": "SPEED",
+            "attractor_depth_amount": 1.8,
+            "palette": "EMBER",
+        }
+    elif props.attractor_preset == "LORENZ":
+        values = {
+            "attractor_type": "LORENZ",
+            "attractor_a": 0.0,
+            "attractor_b": 0.0,
+            "attractor_c": 0.0,
+            "attractor_d": 0.0,
+            "attractor_color_mode": "ITERATION",
+            "attractor_depth_mode": "WAVE",
+            "attractor_depth_amount": 1.2,
+            "palette": "ELECTRIC",
+        }
+    else:
+        values = {
+            "attractor_type": "CLIFFORD",
+            "attractor_a": -1.7,
+            "attractor_b": 1.8,
+            "attractor_c": -1.9,
+            "attractor_d": 0.4,
+            "attractor_color_mode": "POSITION",
+            "attractor_depth_mode": "FLAT",
+            "attractor_depth_amount": 1.8,
+            "palette": "ELECTRIC",
+        }
+    for name, value in values.items():
+        setattr(props, name, value)
+
+
 def apply_preset(props: FLOWFIELD_PG_settings) -> None:
-    if props.generator_type == "LSYSTEM":
+    if props.generator_type == "ATTRACTOR":
+        apply_attractor_preset(props)
+    elif props.generator_type == "LSYSTEM":
         apply_lsystem_preset(props)
     else:
         apply_flow_preset(props)
@@ -577,7 +729,15 @@ class FLOWFIELD_OT_mutate(Operator):
     def execute(self, context: bpy.types.Context) -> set[str]:
         props = context.scene.flow_field_settings
         rng = random.Random(props.seed + context.scene.frame_current * 7919)
-        if props.generator_type == "LSYSTEM":
+        if props.generator_type == "ATTRACTOR":
+            props.attractor_a = max(-3.0, min(3.0, props.attractor_a + rng.uniform(-0.18, 0.18)))
+            props.attractor_b = max(-3.0, min(3.0, props.attractor_b + rng.uniform(-0.18, 0.18)))
+            props.attractor_c = max(-3.0, min(3.0, props.attractor_c + rng.uniform(-0.18, 0.18)))
+            props.attractor_d = max(-3.0, min(3.0, props.attractor_d + rng.uniform(-0.18, 0.18)))
+            props.attractor_point_size = max(
+                0.002, min(0.12, props.attractor_point_size * rng.uniform(0.82, 1.22))
+            )
+        elif props.generator_type == "LSYSTEM":
             props.lsystem_angle = max(2.0, min(90.0, props.lsystem_angle + rng.uniform(-6.0, 6.0)))
             props.lsystem_length_ratio = max(
                 0.2, min(0.95, props.lsystem_length_ratio + rng.uniform(-0.07, 0.07))
@@ -607,7 +767,9 @@ class FLOWFIELD_OT_freeze(Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        return bool(context.scene.get("flow_field_has_generation"))
+        return bool(context.scene.get("flow_field_has_generation")) and (
+            context.scene.flow_field_settings.generator_type != "ATTRACTOR"
+        )
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         if context.screen is not None and context.screen.is_animation_playing:
@@ -645,7 +807,12 @@ class FLOWFIELD_OT_render(Operator):
             else:
                 output_dir = Path(bpy.app.tempdir).resolve() / "flow_field_renders"
             output_dir.mkdir(parents=True, exist_ok=True)
-            kind = "lsystem" if props.generator_type == "LSYSTEM" else "surface_paint"
+            if props.generator_type == "ATTRACTOR":
+                kind = "attractor"
+            elif props.generator_type == "LSYSTEM":
+                kind = "lsystem"
+            else:
+                kind = "surface_paint"
             stem = f"{kind}_seed_{props.seed:06d}"
             render_path = unique_path(output_dir / f"{stem}.png")
             recipe_path = render_path.with_suffix(".json")
@@ -680,7 +847,9 @@ class FLOWFIELD_PT_main(Panel):
 
         intro = layout.box()
         intro.prop(props, "generator_type")
-        if props.generator_type == "LSYSTEM":
+        if props.generator_type == "ATTRACTOR":
+            intro.label(text="An orbit deposits points until a dense image appears", icon="INFO")
+        elif props.generator_type == "LSYSTEM":
             intro.label(text="Rules grow a complete branching sculpture", icon="INFO")
         else:
             intro.label(text="Invisible paths deposit separate paint marks", icon="INFO")
@@ -688,7 +857,9 @@ class FLOWFIELD_PT_main(Panel):
 
         choose = layout.box()
         choose.label(text="1. Start from something understandable")
-        if props.generator_type == "LSYSTEM":
+        if props.generator_type == "ATTRACTOR":
+            choose.prop(props, "attractor_preset")
+        elif props.generator_type == "LSYSTEM":
             choose.prop(props, "lsystem_preset")
         else:
             choose.prop(props, "preset")
@@ -699,7 +870,17 @@ class FLOWFIELD_PT_main(Panel):
         row.operator("flow_field.mutate", text="Mutate", icon="MOD_NOISE")
 
         shape = layout.box()
-        if props.generator_type == "LSYSTEM":
+        if props.generator_type == "ATTRACTOR":
+            shape.label(text="2. Adjust the accumulated points")
+            shape.prop(props, "attractor_iterations")
+            shape.prop(props, "attractor_point_size")
+            shape.prop(props, "attractor_color_mode")
+            shape.prop(props, "attractor_depth_mode")
+            shape.prop(props, "palette")
+            shape.label(text="More Points = denser, slower, and more memory")
+            generate_text = "Generate Full Attractor"
+            generate_icon = "OUTLINER_OB_POINTCLOUD"
+        elif props.generator_type == "LSYSTEM":
             shape.label(text="2. Adjust the visible growth")
             shape.prop(props, "lsystem_iterations")
             shape.prop(props, "lsystem_angle")
@@ -728,7 +909,8 @@ class FLOWFIELD_PT_main(Panel):
         keep.label(text="3. Save the full artwork")
         keep.prop(props, "output_dir")
         keep.operator("flow_field.render", icon="RENDER_STILL")
-        keep.operator("flow_field.freeze", icon="OUTLINER_DATA_MESH")
+        if props.generator_type != "ATTRACTOR":
+            keep.operator("flow_field.freeze", icon="OUTLINER_DATA_MESH")
 
         status = layout.box()
         status.label(text=props.status, icon="DOT")
@@ -878,6 +1060,70 @@ class FLOWFIELD_PT_lsystem_look(Panel):
         layout.label(text="The camera frames new growth automatically")
 
 
+class FLOWFIELD_PT_attractor_equation(Panel):
+    bl_idname = "FLOWFIELD_PT_attractor_equation"
+    bl_label = "Equation & Accumulation"
+    bl_parent_id = "FLOWFIELD_PT_main"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Generative Art"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "ATTRACTOR"
+
+    def draw(self, context: bpy.types.Context) -> None:
+        props = context.scene.flow_field_settings
+        layout = self.layout
+        layout.prop(props, "attractor_type")
+        layout.prop(props, "attractor_iterations")
+        layout.label(text="Points is the attractor's 'let it cook' control")
+        layout.separator()
+        layout.prop(props, "attractor_a")
+        layout.prop(props, "attractor_b")
+        layout.prop(props, "attractor_c")
+        layout.prop(props, "attractor_d")
+        if props.attractor_type == "LORENZ":
+            layout.label(text="Lorenz maps A/B/C around its classic values")
+        else:
+            layout.label(text="Tiny coefficient changes can reshape everything")
+
+
+class FLOWFIELD_PT_attractor_look(Panel):
+    bl_idname = "FLOWFIELD_PT_attractor_look"
+    bl_label = "Points, Color & Depth"
+    bl_parent_id = "FLOWFIELD_PT_main"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Generative Art"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "ATTRACTOR"
+
+    def draw(self, context: bpy.types.Context) -> None:
+        props = context.scene.flow_field_settings
+        layout = self.layout
+        layout.prop(props, "attractor_point_size")
+        layout.prop(props, "attractor_opacity")
+        layout.label(text="Low opacity builds brightness where points overlap")
+        layout.prop(props, "attractor_color_mode")
+        layout.prop(props, "palette")
+        layout.separator()
+        layout.prop(props, "attractor_depth_mode")
+        if props.attractor_depth_mode != "FLAT":
+            layout.prop(props, "attractor_depth_amount")
+        layout.label(text="Flat matches p5.js; other modes fold it into 3D")
+        layout.separator()
+        layout.prop(props, "metallic")
+        layout.prop(props, "roughness")
+        layout.prop(props, "emission_strength")
+        layout.prop(props, "attractor_camera_lens")
+        layout.prop(props, "render_size")
+
+
 CLASSES = (
     FLOWFIELD_PG_settings,
     FLOWFIELD_OT_apply_preset,
@@ -892,6 +1138,8 @@ CLASSES = (
     FLOWFIELD_PT_camera,
     FLOWFIELD_PT_lsystem_growth,
     FLOWFIELD_PT_lsystem_look,
+    FLOWFIELD_PT_attractor_equation,
+    FLOWFIELD_PT_attractor_look,
 )
 
 

@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "flow_field_painter"
-version = "0.4.0"
+version = "0.5.0"
 name = "Generative Art Lab"
-tagline = "Tweak seeded flow paintings and branching sculptures"
+tagline = "Tweak seeded flow paintings, branching rules, and attractors"
 maintainer = "migalicious"
 type = "add-on"
 website = "https://github.com/migalicious/p5js"

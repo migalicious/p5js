@@ -1,88 +1,98 @@
-# Blender generative-art prototypes
+# Generative Art Lab for Blender 0.5
 
-## Flow Field Painter 0.3
+Generative Art Lab ports ideas from the p5.js sketches into one installable
+Blender sidebar. It is built for the same workflow as the browser experiments:
+choose a comprehensible starting point, change knobs, try a seed, let the full
+calculation finish, and keep the results that feel worth capturing.
 
-Flow Field Painter uses invisible flow paths to guide separate paint marks over
-a three-dimensional canvas. The paths are not rendered. They deposit dots or
-dashes at sampled positions on a dark sphere, producing a complete surface
-painting from every generation.
+![Strange Attractor preview](previews/generative_art_lab_v1.png)
 
-![Flow Field Painter preview](previews/flow_field_painter_v3.png)
+No Python editing is needed for ordinary use. All three generators live in
+**3D Viewport → Sidebar → Generative Art**:
 
-Version 0.3 replaces the earlier continuous-tube sculpture with disconnected
-paint marks, spatial opacity patterns, plain-language controls, and curated
-starting presets. No Python editing is needed for ordinary use.
+- **Surface Flow Painter** follows invisible seeded paths over a sphere and
+  deposits disconnected dots or dashes. The guides never render.
+- **L-System Sculpture** ports the Tree, Fern, Coral, and Snowflake grammars
+  from `lsystem_tree_interactive.html` into editable branching curves. It adds
+  seeded 3D spread, branch shrink, thickness, and taper.
+- **Strange Attractor** ports the Clifford, De Jong, and Lorenz equations from
+  `strange_attractor_interactive.html`. A dense geometry-node point cloud takes
+  the place of millions of translucent canvas dots.
 
 ## First-time installation
 
-These steps target the verified Blender 5.2 interface on mini:
+These steps were verified in Blender 5.2.0 LTS on **mini**:
 
 1. Open Blender.
 2. Choose **Edit → Preferences**, then select **Extensions**.
 3. Open the Extensions menu and choose **Install from Disk…**.
-4. Select `blender/dist/flow_field_painter-0.3.0.zip`. Do not unzip it first.
-5. Flow Field Painter should enable automatically. If it does not, find it
+4. Select `blender/dist/flow_field_painter-0.5.0.zip`. Do not unzip it.
+5. Generative Art Lab should enable automatically. If it does not, find it
    under **Add-ons** and enable its checkbox.
-6. Close Preferences and open `blender/flow_field_painter_starter.blend`.
-7. In the large 3D view, press `N` if its sidebar is hidden, then select the
+6. Close Preferences and open `blender/generative_art_lab_starter.blend`.
+7. In the large 3D view, press `N` if the sidebar is hidden, then select the
    **Generative Art** tab.
-8. Use **File → Save As…** to make a personal working copy before experimenting.
+8. Use **File → Save As…** to make a personal working copy.
 
-The starter scene opens with a complete seed-42 **Calm Currents** painting. It
-is safe to experiment: the extension replaces only its live generated
-collection. Mesh copies and objects you add yourself are preserved.
+The starter opens with a fully accumulated 140,000-point Clifford attractor.
+The extension replaces only its own live generated collection. Mesh copies and
+objects you add yourself are preserved.
 
-## The three-step workflow
+## The shared workflow
 
-1. Choose a **Starting Style**, then click **Apply Preset & Paint**.
-2. Adjust the visible paint controls and click **Generate Full Painting**.
-3. Click **Render PNG** to save the picture and its exact JSON recipe. Use
-   **Make Mesh Copy** only if you want a converted mesh version preserved.
+1. Choose a **Generator** and a starting preset, then click **Apply Preset &
+   Generate**.
+2. Adjust the visible quick controls and click the large **Generate Full…**
+   button. Collapsed sections expose every generator-specific knob.
+3. Click **Render PNG** to save the image and its exact JSON recipe. **Make Mesh
+   Copy** preserves converted curve geometry when the current generator uses
+   curves.
 
-**New Seed** gives the current knobs a completely new starting condition.
-**Mutate Knobs** keeps the seed but nudges several motion controls, creating a
-related result.
+**New Seed** changes the repeatable starting condition. **Mutate** nudges a
+small set of high-impact controls while retaining the current seed. Generation
+always produces the finished result; there is no animation timeline to wait on.
 
-The four presets intentionally demonstrate different parts of the system:
+If **Save To** is blank, PNGs and recipes go in a `renders` folder beside the
+open `.blend` file.
 
-- **Calm Currents:** broad, smooth paths and soft fading at their ends.
-- **Braided Orbit:** coordinated paths wrapping around the sphere, with pulsing
-  opacity.
-- **Broken Storm:** restless short marks and spatial opacity clouds.
-- **Constellation:** sparse dots and tiny dashes with more empty canvas.
+## What the unfamiliar controls mean
 
-Knobs are grouped into collapsed sections:
+### Surface Flow Painter
 
-- **Invisible Path Shape:** painter count, path length, broad-versus-busy
-  pattern scale, flow smoothness, wander, shared orbit, and travel speed.
-- **Paint, Opacity & Canvas:** palette, canvas size, brush width, stroke length,
-  mark spacing and chance, opacity pattern and range, material response, and
-  whether the canvas object is visible.
-- **Camera & Output:** view direction, distance, lens, and PNG resolution.
+- **Painters / Path Length:** coverage and how long each invisible guide runs.
+- **Pattern Scale:** low makes broad bends; high makes busier turns.
+- **Flow Smoothness:** high produces graceful paths.
+- **Mark Spacing / Mark Chance:** how often a guide deposits visible paint.
+- **Opacity Pattern:** even, faded path ends, spatial clouds, or repeating
+  pulses.
 
-Most knob changes take effect the next time **Generate Full Painting** is
-clicked. Helpful labels under the path controls explain the important
-directions: lower Pattern Scale makes broad bends, higher values make busy
-turns; higher Flow Smoothness makes more graceful paths; higher Mark Spacing
-leaves more canvas showing.
+### L-System Sculpture
 
-Opacity patterns are deliberately concrete:
+- **Growth Rounds:** repeatedly rewrites the grammar. One extra round can
+  multiply the branch count, so generation is capped at 30,000 branches.
+- **Branch Angle:** how far new growth turns from its parent.
+- **Branch Shrink:** how quickly nested side growth gets shorter.
+- **Angle Wander:** seeded irregularity rather than perfect symmetry.
+- **3D Spread:** zero stays planar; higher values twist branches around the
+  trunk.
+- **Thickness Taper:** low values make tips become thin quickly.
 
-- **Even:** all marks use the strongest opacity.
-- **Fade Along Paths:** beginnings and endings are faint.
-- **Clouds:** spatial regions become strong or ghosted.
-- **Pulse:** strength rises and falls repeatedly along a path.
+### Strange Attractor
 
-If **Save To** is blank, rendered PNGs and recipes go into a `renders` folder
-beside the open `.blend` file. Every render gets a matching `.json` file.
+- **Points:** the direct equivalent of “let it cook.” More points make the
+  orbit denser but cost time and memory. The UI allows 5,000–1,000,000; Lorenz
+  is capped at 500,000.
+- **Coefficient A/B/C/D:** the equation parameters. Tiny changes can produce a
+  new structure—or collapse the orbit—so presets are useful anchors.
+- **Point Size / Point Opacity:** low opacity builds brightness in places the
+  orbit revisits frequently.
+- **Color From:** position, orbit age, or movement speed.
+- **Depth From:** Flat Image preserves the p5.js projection; Orbit Age,
+  Movement Speed, and Ribbon Fold turn it into actual 3D point geometry.
 
-## Command-line generation
+## Command-line flow-field generation
 
-The same reusable generator can run without the UI for batches or remote
-machines. It produces the fully painted surface as an editable `.blend`, a JSON
-recipe, and optionally a PNG in `blender/output/`.
-
-### Run on mini (zsh)
+The original flow painter still has a reusable batch entry point:
 
 ```zsh
 /Applications/Blender.app/Contents/MacOS/Blender \
@@ -91,30 +101,20 @@ recipe, and optionally a PNG in `blender/output/`.
   --seed 42 --render
 ```
 
-Available command-line controls:
-
-```text
---seed INTEGER
---agents INTEGER
---steps INTEGER
---render-size INTEGER
---output-dir PATH
---render
-```
-
-The same script is intended to run on desktop once Blender 5.2 is installed
-there. Its Windows invocation has not yet been verified, so it is not presented
-as a paste-ready command.
-
 ## Development checks
 
-The integration smoke test registers the extension, generates twice, confirms
-an unrelated user object survives, verifies disconnected surface marks and the
-canvas object, makes a nonempty mesh copy, and renders a PNG with a matching
-recipe:
+All commands below target zsh on mini and were run with Blender 5.2.0 LTS:
 
 ```zsh
 /Applications/Blender.app/Contents/MacOS/Blender \
   --background --factory-startup --python-exit-code 1 \
   --python blender/tests/test_flow_field_painter.py
+
+/Applications/Blender.app/Contents/MacOS/Blender \
+  --background --factory-startup --python-exit-code 1 \
+  --python blender/tests/test_lsystem_sculpture.py
+
+/Applications/Blender.app/Contents/MacOS/Blender \
+  --background --factory-startup --python-exit-code 1 \
+  --python blender/tests/test_strange_attractor.py
 ```
