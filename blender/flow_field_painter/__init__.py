@@ -1,4 +1,4 @@
-"""Beginner-facing controls for growing and capturing 3D flow paintings."""
+"""Beginner-facing controls for a collection of seeded generative art tools."""
 
 from __future__ import annotations
 
@@ -11,16 +11,17 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Operator, Panel, PropertyGroup
 
-from .generator import FlowSettings, build, freeze_current_frame
+from .generator import FlowSettings, build as build_flow, freeze_current_frame
+from .lsystem import LSystemSettings, build as build_lsystem
 
 
 bl_info = {
-    "name": "Flow Field Painter",
+    "name": "Generative Art Lab",
     "author": "migalicious",
-    "version": (0, 3, 0),
+    "version": (0, 4, 0),
     "blender": (5, 2, 0),
     "location": "3D Viewport > Sidebar > Generative Art",
-    "description": "Grow and capture seeded three-dimensional flow paintings",
+    "description": "Tweak and render seeded flow paintings and L-system sculptures",
     "category": "3D View",
 }
 
@@ -31,6 +32,11 @@ PALETTE_ITEMS = (
     ("TIDAL", "Tidal", "Deep blue through bright cyan"),
     ("GROVE", "Grove", "Forest green through pale yellow-green"),
     ("MONO", "Monochrome", "Black, gray, and white"),
+)
+
+GENERATOR_ITEMS = (
+    ("FLOW", "Surface Flow Painter", "Deposit disconnected marks along invisible paths on an object"),
+    ("LSYSTEM", "L-System Sculpture", "Grow seeded branching structures from rewriting rules"),
 )
 
 PRESET_ITEMS = (
@@ -47,8 +53,21 @@ OPACITY_ITEMS = (
     ("PULSE", "Pulse", "Opacity rises and falls repeatedly along each guide path"),
 )
 
+LSYSTEM_PRESET_ITEMS = (
+    ("TREE", "Tree", "Repeated trunk and paired branches"),
+    ("FERN", "Fern", "Nested asymmetric fronds"),
+    ("CORAL", "Coral", "Dense repeated branching in many directions"),
+    ("SNOWFLAKE", "Snowflake", "Planar Koch snowflake from the original sketch"),
+)
+
 
 class FLOWFIELD_PG_settings(PropertyGroup):
+    generator_type: EnumProperty(
+        name="Generator",
+        description="Choose which kind of generative artwork these controls build",
+        items=GENERATOR_ITEMS,
+        default="FLOW",
+    )
     preset: EnumProperty(name="Starting Style", items=PRESET_ITEMS, default="CALM")
     seed: IntProperty(
         name="Seed",
@@ -211,10 +230,71 @@ class FLOWFIELD_PG_settings(PropertyGroup):
         default="",
         subtype="DIR_PATH",
     )
+    lsystem_preset: EnumProperty(name="Growth Rule", items=LSYSTEM_PRESET_ITEMS, default="TREE")
+    lsystem_iterations: IntProperty(
+        name="Growth Rounds",
+        description="How many times the rewriting rule expands; each round can multiply the branch count",
+        default=5,
+        min=1,
+        max=7,
+    )
+    lsystem_angle: FloatProperty(
+        name="Branch Angle",
+        description="How sharply new growth turns away from its parent",
+        default=25.0,
+        min=2.0,
+        max=90.0,
+    )
+    lsystem_length_ratio: FloatProperty(
+        name="Branch Shrink",
+        description="Length retained at each deeper nesting level",
+        default=0.68,
+        min=0.2,
+        max=0.95,
+        subtype="FACTOR",
+    )
+    lsystem_randomness: FloatProperty(
+        name="Angle Wander",
+        description="Seeded irregularity added to branch directions",
+        default=8.0,
+        min=0.0,
+        max=40.0,
+    )
+    lsystem_segment_length: FloatProperty(
+        name="Growth Step",
+        description="Length of one forward turtle step",
+        default=0.42,
+        min=0.02,
+        max=2.0,
+    )
+    lsystem_spatial_spread: FloatProperty(
+        name="3D Spread",
+        description="How much branches twist around the trunk instead of staying flat",
+        default=105.0,
+        min=0.0,
+        max=180.0,
+    )
+    lsystem_thickness: FloatProperty(
+        name="Branch Width",
+        description="Thickness of the root branches",
+        default=0.075,
+        min=0.005,
+        max=0.35,
+        precision=3,
+    )
+    lsystem_taper: FloatProperty(
+        name="Thickness Taper",
+        description="Width retained at each deeper branch level",
+        default=0.72,
+        min=0.25,
+        max=1.0,
+        subtype="FACTOR",
+    )
+    lsystem_camera_lens: FloatProperty(name="Sculpture Camera Lens", default=58.0, min=18.0, max=150.0)
     status: StringProperty(name="Status", default="Ready for a first generation")
 
 
-def settings_from_scene(scene: bpy.types.Scene) -> FlowSettings:
+def flow_settings_from_scene(scene: bpy.types.Scene) -> FlowSettings:
     props = scene.flow_field_settings
     return FlowSettings(
         seed=props.seed,
@@ -247,6 +327,34 @@ def settings_from_scene(scene: bpy.types.Scene) -> FlowSettings:
     )
 
 
+def lsystem_settings_from_scene(scene: bpy.types.Scene) -> LSystemSettings:
+    props = scene.flow_field_settings
+    return LSystemSettings(
+        seed=props.seed,
+        preset=props.lsystem_preset,
+        iterations=props.lsystem_iterations,
+        branch_angle_deg=props.lsystem_angle,
+        length_ratio=props.lsystem_length_ratio,
+        angle_randomness_deg=props.lsystem_randomness,
+        segment_length=props.lsystem_segment_length,
+        spatial_spread_deg=props.lsystem_spatial_spread,
+        branch_thickness=props.lsystem_thickness,
+        thickness_taper=props.lsystem_taper,
+        palette=props.palette,
+        metallic=props.metallic,
+        roughness=props.roughness,
+        emission_strength=props.emission_strength,
+        camera_lens=props.lsystem_camera_lens,
+        render_size=props.render_size,
+    )
+
+
+def settings_from_scene(scene: bpy.types.Scene) -> FlowSettings | LSystemSettings:
+    if scene.flow_field_settings.generator_type == "LSYSTEM":
+        return lsystem_settings_from_scene(scene)
+    return flow_settings_from_scene(scene)
+
+
 def set_view_to_camera(context: bpy.types.Context) -> None:
     screen = context.screen
     if screen is None:
@@ -256,16 +364,26 @@ def set_view_to_camera(context: bpy.types.Context) -> None:
             area.spaces.active.region_3d.view_perspective = "CAMERA"
 
 
-def generate_full_painting(context: bpy.types.Context) -> None:
+def generate_artwork(context: bpy.types.Context) -> None:
     scene = context.scene
     props = scene.flow_field_settings
     settings = settings_from_scene(scene)
-    build(scene, settings)
+    if props.generator_type == "LSYSTEM":
+        build_lsystem(scene, settings)
+        noun = "sculpture"
+    else:
+        build_flow(scene, settings)
+        noun = "painting"
     scene["flow_field_seed"] = props.seed
     scene["flow_field_has_generation"] = True
     scene.frame_set(1)
     set_view_to_camera(context)
-    props.status = f"Seed {props.seed} is fully painted"
+    props.status = f"Seed {props.seed} {noun} is complete"
+
+
+def generate_full_painting(context: bpy.types.Context) -> None:
+    """Backward-compatible entry point used by the starter-scene script."""
+    generate_artwork(context)
 
 
 def unique_path(path: Path) -> Path:
@@ -278,7 +396,7 @@ def unique_path(path: Path) -> Path:
     raise RuntimeError(f"Could not choose a unique filename near {path}")
 
 
-def apply_preset(props: FLOWFIELD_PG_settings) -> None:
+def apply_flow_preset(props: FLOWFIELD_PG_settings) -> None:
     if props.preset == "BRAIDED":
         values = {
             "agents": 48,
@@ -351,9 +469,69 @@ def apply_preset(props: FLOWFIELD_PG_settings) -> None:
         setattr(props, name, value)
 
 
+def apply_lsystem_preset(props: FLOWFIELD_PG_settings) -> None:
+    if props.lsystem_preset == "FERN":
+        values = {
+            "lsystem_iterations": 5,
+            "lsystem_angle": 22.0,
+            "lsystem_length_ratio": 0.65,
+            "lsystem_randomness": 3.0,
+            "lsystem_segment_length": 0.28,
+            "lsystem_spatial_spread": 72.0,
+            "lsystem_thickness": 0.055,
+            "lsystem_taper": 0.76,
+            "palette": "GROVE",
+        }
+    elif props.lsystem_preset == "CORAL":
+        values = {
+            "lsystem_iterations": 4,
+            "lsystem_angle": 28.0,
+            "lsystem_length_ratio": 0.70,
+            "lsystem_randomness": 12.0,
+            "lsystem_segment_length": 0.30,
+            "lsystem_spatial_spread": 132.0,
+            "lsystem_thickness": 0.06,
+            "lsystem_taper": 0.73,
+            "palette": "EMBER",
+        }
+    elif props.lsystem_preset == "SNOWFLAKE":
+        values = {
+            "lsystem_iterations": 4,
+            "lsystem_angle": 60.0,
+            "lsystem_length_ratio": 0.33,
+            "lsystem_randomness": 0.0,
+            "lsystem_segment_length": 0.15,
+            "lsystem_spatial_spread": 0.0,
+            "lsystem_thickness": 0.035,
+            "lsystem_taper": 1.0,
+            "palette": "TIDAL",
+        }
+    else:
+        values = {
+            "lsystem_iterations": 5,
+            "lsystem_angle": 25.0,
+            "lsystem_length_ratio": 0.68,
+            "lsystem_randomness": 8.0,
+            "lsystem_segment_length": 0.42,
+            "lsystem_spatial_spread": 105.0,
+            "lsystem_thickness": 0.075,
+            "lsystem_taper": 0.72,
+            "palette": "GROVE",
+        }
+    for name, value in values.items():
+        setattr(props, name, value)
+
+
+def apply_preset(props: FLOWFIELD_PG_settings) -> None:
+    if props.generator_type == "LSYSTEM":
+        apply_lsystem_preset(props)
+    else:
+        apply_flow_preset(props)
+
+
 class FLOWFIELD_OT_apply_preset(Operator):
     bl_idname = "flow_field.apply_preset"
-    bl_label = "Apply Preset & Paint"
+    bl_label = "Apply Preset & Generate"
     bl_description = "Load a curated group of understandable settings and generate the full result"
     bl_options = {"REGISTER", "UNDO"}
 
@@ -364,8 +542,8 @@ class FLOWFIELD_OT_apply_preset(Operator):
 
 class FLOWFIELD_OT_generate(Operator):
     bl_idname = "flow_field.generate"
-    bl_label = "Generate Full Painting"
-    bl_description = "Rebuild the complete surface painting from these controls"
+    bl_label = "Generate Full Artwork"
+    bl_description = "Rebuild the complete artwork from these controls"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context: bpy.types.Context) -> set[str]:
@@ -375,14 +553,14 @@ class FLOWFIELD_OT_generate(Operator):
             context.scene.flow_field_settings.status = f"Generation failed: {exc}"
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        self.report({"INFO"}, "Complete surface painting generated")
+        self.report({"INFO"}, "Complete generative artwork built")
         return {"FINISHED"}
 
 
 class FLOWFIELD_OT_new_seed(Operator):
     bl_idname = "flow_field.new_seed"
     bl_label = "New Seed"
-    bl_description = "Choose a fresh seed, rebuild, and play from the beginning"
+    bl_description = "Choose a fresh seed and rebuild the complete artwork"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context: bpy.types.Context) -> set[str]:
@@ -393,25 +571,38 @@ class FLOWFIELD_OT_new_seed(Operator):
 class FLOWFIELD_OT_mutate(Operator):
     bl_idname = "flow_field.mutate"
     bl_label = "Mutate Knobs"
-    bl_description = "Nudge several understandable paint controls while keeping the current seed"
+    bl_description = "Nudge several understandable controls while keeping the current seed"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         props = context.scene.flow_field_settings
         rng = random.Random(props.seed + context.scene.frame_current * 7919)
-        props.field_scale = max(0.03, min(1.5, props.field_scale * rng.uniform(0.78, 1.22)))
-        props.inertia = max(0.0, min(0.98, props.inertia + rng.uniform(-0.08, 0.08)))
-        props.orbit_strength = max(-2.0, min(2.0, props.orbit_strength + rng.uniform(-0.22, 0.22)))
-        props.mark_spacing = max(1, min(30, props.mark_spacing + rng.choice((-1, 0, 1))))
-        props.mark_length = max(0.005, min(0.8, props.mark_length * rng.uniform(0.8, 1.25)))
-        props.paint_coverage = max(0.05, min(1.0, props.paint_coverage + rng.uniform(-0.12, 0.12)))
+        if props.generator_type == "LSYSTEM":
+            props.lsystem_angle = max(2.0, min(90.0, props.lsystem_angle + rng.uniform(-6.0, 6.0)))
+            props.lsystem_length_ratio = max(
+                0.2, min(0.95, props.lsystem_length_ratio + rng.uniform(-0.07, 0.07))
+            )
+            props.lsystem_randomness = max(
+                0.0, min(40.0, props.lsystem_randomness + rng.uniform(-4.0, 4.0))
+            )
+            props.lsystem_spatial_spread = max(
+                0.0, min(180.0, props.lsystem_spatial_spread + rng.uniform(-20.0, 20.0))
+            )
+            props.lsystem_taper = max(0.25, min(1.0, props.lsystem_taper + rng.uniform(-0.07, 0.07)))
+        else:
+            props.field_scale = max(0.03, min(1.5, props.field_scale * rng.uniform(0.78, 1.22)))
+            props.inertia = max(0.0, min(0.98, props.inertia + rng.uniform(-0.08, 0.08)))
+            props.orbit_strength = max(-2.0, min(2.0, props.orbit_strength + rng.uniform(-0.22, 0.22)))
+            props.mark_spacing = max(1, min(30, props.mark_spacing + rng.choice((-1, 0, 1))))
+            props.mark_length = max(0.005, min(0.8, props.mark_length * rng.uniform(0.8, 1.25)))
+            props.paint_coverage = max(0.05, min(1.0, props.paint_coverage + rng.uniform(-0.12, 0.12)))
         return FLOWFIELD_OT_generate.execute(self, context)
 
 
 class FLOWFIELD_OT_freeze(Operator):
     bl_idname = "flow_field.freeze"
     bl_label = "Make Mesh Copy"
-    bl_description = "Preserve a converted mesh copy while leaving the editable paint marks intact"
+    bl_description = "Preserve a converted mesh copy while leaving the editable generated curves intact"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -434,7 +625,7 @@ class FLOWFIELD_OT_freeze(Operator):
 class FLOWFIELD_OT_render(Operator):
     bl_idname = "flow_field.render"
     bl_label = "Render PNG"
-    bl_description = "Render the full surface painting and save its exact recipe"
+    bl_description = "Render the full artwork and save its exact recipe"
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -454,11 +645,13 @@ class FLOWFIELD_OT_render(Operator):
             else:
                 output_dir = Path(bpy.app.tempdir).resolve() / "flow_field_renders"
             output_dir.mkdir(parents=True, exist_ok=True)
-            stem = f"surface_paint_seed_{props.seed:06d}"
+            kind = "lsystem" if props.generator_type == "LSYSTEM" else "surface_paint"
+            stem = f"{kind}_seed_{props.seed:06d}"
             render_path = unique_path(output_dir / f"{stem}.png")
             recipe_path = render_path.with_suffix(".json")
             settings = settings_from_scene(scene)
-            recipe_path.write_text(json.dumps(asdict(settings), indent=2) + "\n", encoding="utf-8")
+            recipe = {"generator_type": props.generator_type, **asdict(settings)}
+            recipe_path.write_text(json.dumps(recipe, indent=2) + "\n", encoding="utf-8")
             scene.render.filepath = str(render_path)
             bpy.ops.render.render(write_still=True)
         except Exception as exc:
@@ -467,14 +660,14 @@ class FLOWFIELD_OT_render(Operator):
             return {"CANCELLED"}
 
         scene["flow_field_last_render"] = str(render_path)
-        props.status = f"Rendered full painting to {render_path.name}"
+        props.status = f"Rendered full artwork to {render_path.name}"
         self.report({"INFO"}, f"Saved {render_path}")
         return {"FINISHED"}
 
 
 class FLOWFIELD_PT_main(Panel):
     bl_idname = "FLOWFIELD_PT_main"
-    bl_label = "Flow Field Painter"
+    bl_label = "Generative Art Lab"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Generative Art"
@@ -486,33 +679,53 @@ class FLOWFIELD_PT_main(Panel):
         has_generation = bool(scene.get("flow_field_has_generation"))
 
         intro = layout.box()
-        intro.label(text="Paths guide paint; the paths stay invisible", icon="INFO")
+        intro.prop(props, "generator_type")
+        if props.generator_type == "LSYSTEM":
+            intro.label(text="Rules grow a complete branching sculpture", icon="INFO")
+        else:
+            intro.label(text="Invisible paths deposit separate paint marks", icon="INFO")
         intro.label(text="Every Generate makes the full result")
 
         choose = layout.box()
         choose.label(text="1. Start from something understandable")
-        choose.prop(props, "preset")
+        if props.generator_type == "LSYSTEM":
+            choose.prop(props, "lsystem_preset")
+        else:
+            choose.prop(props, "preset")
         choose.operator("flow_field.apply_preset", icon="PRESET")
         choose.prop(props, "seed")
         row = choose.row(align=True)
         row.operator("flow_field.new_seed", text="New Seed", icon="FILE_REFRESH")
         row.operator("flow_field.mutate", text="Mutate", icon="MOD_NOISE")
 
-        paint = layout.box()
-        paint.label(text="2. Adjust the visible paint marks")
-        paint.prop(props, "palette")
-        paint.prop(props, "trail_radius")
-        paint.prop(props, "mark_length")
-        paint.prop(props, "mark_spacing")
-        paint.prop(props, "opacity_mode")
-        paint.label(text="Spacing high = fewer marks")
-        generate = paint.row()
+        shape = layout.box()
+        if props.generator_type == "LSYSTEM":
+            shape.label(text="2. Adjust the visible growth")
+            shape.prop(props, "lsystem_iterations")
+            shape.prop(props, "lsystem_angle")
+            shape.prop(props, "lsystem_spatial_spread")
+            shape.prop(props, "lsystem_thickness")
+            shape.prop(props, "palette")
+            shape.label(text="Growth Rounds multiplies the branch count")
+            generate_text = "Generate Full Sculpture"
+            generate_icon = "OUTLINER_OB_CURVE"
+        else:
+            shape.label(text="2. Adjust the visible paint marks")
+            shape.prop(props, "palette")
+            shape.prop(props, "trail_radius")
+            shape.prop(props, "mark_length")
+            shape.prop(props, "mark_spacing")
+            shape.prop(props, "opacity_mode")
+            shape.label(text="Spacing high = fewer marks")
+            generate_text = "Generate Full Painting"
+            generate_icon = "BRUSH_DATA"
+        generate = shape.row()
         generate.scale_y = 1.5
-        generate.operator("flow_field.generate", icon="BRUSH_DATA")
+        generate.operator("flow_field.generate", text=generate_text, icon=generate_icon)
 
         keep = layout.box()
         keep.enabled = has_generation
-        keep.label(text="3. Save the full painting")
+        keep.label(text="3. Save the full artwork")
         keep.prop(props, "output_dir")
         keep.operator("flow_field.render", icon="RENDER_STILL")
         keep.operator("flow_field.freeze", icon="OUTLINER_DATA_MESH")
@@ -529,6 +742,10 @@ class FLOWFIELD_PT_motion(Panel):
     bl_region_type = "UI"
     bl_category = "Generative Art"
     bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "FLOW"
 
     def draw(self, context: bpy.types.Context) -> None:
         props = context.scene.flow_field_settings
@@ -553,6 +770,10 @@ class FLOWFIELD_PT_look(Panel):
     bl_region_type = "UI"
     bl_category = "Generative Art"
     bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "FLOW"
 
     def draw(self, context: bpy.types.Context) -> None:
         props = context.scene.flow_field_settings
@@ -586,6 +807,10 @@ class FLOWFIELD_PT_camera(Panel):
     bl_category = "Generative Art"
     bl_options = {"DEFAULT_CLOSED"}
 
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "FLOW"
+
     def draw(self, context: bpy.types.Context) -> None:
         props = context.scene.flow_field_settings
         layout = self.layout
@@ -595,6 +820,62 @@ class FLOWFIELD_PT_camera(Panel):
         layout.prop(props, "camera_lens")
         layout.prop(props, "render_size")
         layout.label(text="Camera changes apply on Generate")
+
+
+class FLOWFIELD_PT_lsystem_growth(Panel):
+    bl_idname = "FLOWFIELD_PT_lsystem_growth"
+    bl_label = "Growth Rule & 3D Shape"
+    bl_parent_id = "FLOWFIELD_PT_main"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Generative Art"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "LSYSTEM"
+
+    def draw(self, context: bpy.types.Context) -> None:
+        props = context.scene.flow_field_settings
+        layout = self.layout
+        layout.prop(props, "lsystem_iterations")
+        layout.label(text="Each round rewrites every symbol")
+        layout.prop(props, "lsystem_angle")
+        layout.prop(props, "lsystem_length_ratio")
+        layout.label(text="Low shrink = short twigs; high = long twigs")
+        layout.prop(props, "lsystem_randomness")
+        layout.prop(props, "lsystem_segment_length")
+        layout.prop(props, "lsystem_spatial_spread")
+        layout.label(text="0 spread stays flat; high spread wraps in 3D")
+
+
+class FLOWFIELD_PT_lsystem_look(Panel):
+    bl_idname = "FLOWFIELD_PT_lsystem_look"
+    bl_label = "Branches, Material & Camera"
+    bl_parent_id = "FLOWFIELD_PT_main"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Generative Art"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.scene.flow_field_settings.generator_type == "LSYSTEM"
+
+    def draw(self, context: bpy.types.Context) -> None:
+        props = context.scene.flow_field_settings
+        layout = self.layout
+        layout.prop(props, "lsystem_thickness")
+        layout.prop(props, "lsystem_taper")
+        layout.label(text="Low taper makes tips thin quickly")
+        layout.prop(props, "palette")
+        layout.prop(props, "metallic")
+        layout.prop(props, "roughness")
+        layout.prop(props, "emission_strength")
+        layout.separator()
+        layout.prop(props, "lsystem_camera_lens")
+        layout.prop(props, "render_size")
+        layout.label(text="The camera frames new growth automatically")
 
 
 CLASSES = (
@@ -609,6 +890,8 @@ CLASSES = (
     FLOWFIELD_PT_motion,
     FLOWFIELD_PT_look,
     FLOWFIELD_PT_camera,
+    FLOWFIELD_PT_lsystem_growth,
+    FLOWFIELD_PT_lsystem_look,
 )
 
 
