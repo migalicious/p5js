@@ -1,6 +1,6 @@
 # Generative Art Sketches
 
-A collection of interactive generative art sketches built with the HTML5 Canvas API. Each sketch runs entirely in the browser — no build step, no dependencies beyond what's loaded from CDN.
+A collection of interactive generative art sketches built with the HTML5 Canvas API, plus experiments that carry the same seeded, parameter-driven process into Blender. The browser sketches require no build step or local dependencies beyond what's loaded from CDN.
 
 Open `index.html` for a visual gallery of all sketches.
 
@@ -80,6 +80,13 @@ open index.html          # gallery
 open color_flow_field.html
 ```
 
+## Blender experiments
+
+The [Blender prototypes](blender/README.md) turn the sketches' generative rules
+into editable scenes and geometry. The first prototype is an animated 3D
+flow-field painting: seeded agents leave tapered trails that accumulate across
+Blender's timeline and can be captured at any frame.
+
 ## Thumbnails
 
 The gallery page (`index.html`) looks for thumbnail images in a `thumbnails/` folder named after each sketch file:
@@ -103,3 +110,4 @@ Missing thumbnails fall back to a styled placeholder automatically. To capture a
 - L-system string expansion with stack-based turtle graphics
 - CSS Grid / Flexbox for UI layout
 - Google Fonts (DM Mono, DM Sans)
+- Blender Python API and native curve geometry
