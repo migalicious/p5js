@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import bpy
-from bpy.props import EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import Operator, Panel, PropertyGroup
 
 from .generator import FlowSettings, build, freeze_current_frame
@@ -17,7 +17,7 @@ from .generator import FlowSettings, build, freeze_current_frame
 bl_info = {
     "name": "Flow Field Painter",
     "author": "migalicious",
-    "version": (0, 2, 0),
+    "version": (0, 3, 0),
     "blender": (5, 2, 0),
     "location": "3D Viewport > Sidebar > Generative Art",
     "description": "Grow and capture seeded three-dimensional flow paintings",
@@ -33,8 +33,23 @@ PALETTE_ITEMS = (
     ("MONO", "Monochrome", "Black, gray, and white"),
 )
 
+PRESET_ITEMS = (
+    ("CALM", "Calm Currents", "Broad, smooth paths with soft fading marks"),
+    ("BRAIDED", "Braided Orbit", "Long coordinated strokes wrapping around the canvas"),
+    ("STORM", "Broken Storm", "Shorter, restless marks with turbulent motion"),
+    ("CONSTELLATION", "Constellation", "Sparse points and tiny dashes with open space"),
+)
+
+OPACITY_ITEMS = (
+    ("UNIFORM", "Even", "Every paint mark has the same opacity"),
+    ("FADE_PATH", "Fade Along Paths", "Marks fade near the beginning and end of each guide path"),
+    ("FIELD", "Clouds", "A second noise field creates spatial patches of strong and faint paint"),
+    ("PULSE", "Pulse", "Opacity rises and falls repeatedly along each guide path"),
+)
+
 
 class FLOWFIELD_PG_settings(PropertyGroup):
+    preset: EnumProperty(name="Starting Style", items=PRESET_ITEMS, default="CALM")
     seed: IntProperty(
         name="Seed",
         description="The repeatable identity of this painting",
@@ -43,99 +58,121 @@ class FLOWFIELD_PG_settings(PropertyGroup):
         max=999_999,
     )
     agents: IntProperty(
-        name="Trail Count",
-        description="How many agents paint trails; higher values take more memory",
-        default=150,
+        name="Painters",
+        description="How many invisible brushes travel over the canvas surface",
+        default=70,
         min=5,
         max=800,
     )
     steps: IntProperty(
-        name="Trail Length",
-        description="How many simulation steps each trail can paint",
-        default=280,
+        name="Path Length",
+        description="How far each invisible brush travels before stopping",
+        default=260,
         min=20,
         max=1200,
     )
-    growth_frames: IntProperty(
-        name="Cooking Time",
-        description="Frames required for each wave to finish growing",
-        default=180,
-        min=20,
-        max=1000,
-    )
-    waves: IntProperty(
-        name="Start Waves",
-        description="Stagger trails into groups that begin at slightly different times",
-        default=9,
-        min=1,
-        max=30,
-    )
     field_scale: FloatProperty(
-        name="Flow Scale",
-        description="Size of the broad bends in the flow field",
-        default=0.31,
+        name="Pattern Scale",
+        description="Low values make broad bends; high values make smaller, busier turns",
+        default=0.22,
         min=0.03,
         max=1.5,
         precision=3,
     )
     step_size: FloatProperty(
-        name="Step Size",
-        description="Distance painted on each simulation step",
-        default=0.067,
+        name="Travel Speed",
+        description="Distance an invisible brush advances on each step",
+        default=0.065,
         min=0.005,
         max=0.3,
         precision=3,
     )
     inertia: FloatProperty(
-        name="Momentum",
-        description="How strongly trails resist sudden changes in direction",
-        default=0.84,
+        name="Flow Smoothness",
+        description="Higher values make graceful paths; lower values turn more abruptly",
+        default=0.93,
         min=0.0,
         max=0.98,
         subtype="FACTOR",
     )
     noise_strength: FloatProperty(
-        name="Turbulence",
-        description="Strength of the three-dimensional noise field",
-        default=1.0,
+        name="Wander",
+        description="How strongly paths follow irregular noise instead of circling",
+        default=0.85,
         min=0.0,
         max=3.0,
     )
     orbit_strength: FloatProperty(
-        name="Orbit",
-        description="How strongly trails circle the center",
-        default=0.42,
+        name="Around the Canvas",
+        description="How strongly paths wrap around the canvas in a shared direction",
+        default=0.65,
         min=-2.0,
         max=2.0,
     )
-    center_strength: FloatProperty(
-        name="Center Pull",
-        description="How strongly wandering trails are drawn back inward",
-        default=0.23,
-        min=0.0,
-        max=2.0,
-    )
-    lift_strength: FloatProperty(
-        name="Vertical Lift",
-        description="Adds rising and falling motion through the volume",
-        default=0.16,
-        min=-1.0,
-        max=1.0,
-    )
-    bounds_radius: FloatProperty(
-        name="Painting Size",
-        description="Approximate radius of the space where trails begin",
-        default=4.8,
-        min=0.5,
-        max=20.0,
-    )
     trail_radius: FloatProperty(
-        name="Trail Thickness",
-        description="Radius of the painted tubes",
-        default=0.023,
+        name="Brush Width",
+        description="Thickness of each disconnected paint mark",
+        default=0.035,
         min=0.002,
         max=0.2,
         precision=3,
+    )
+    canvas_radius: FloatProperty(
+        name="Canvas Size",
+        description="Radius of the spherical object being painted",
+        default=4.0,
+        min=1.0,
+        max=12.0,
+    )
+    show_canvas: BoolProperty(
+        name="Show Canvas Object",
+        description="Render the dark object beneath the paint marks",
+        default=True,
+    )
+    mark_spacing: IntProperty(
+        name="Mark Spacing",
+        description="Steps between deposited marks; higher values leave more empty space",
+        default=4,
+        min=1,
+        max=30,
+    )
+    mark_length: FloatProperty(
+        name="Stroke Length",
+        description="Length of each separate dash; very low values look like dots",
+        default=0.16,
+        min=0.005,
+        max=0.8,
+        precision=3,
+    )
+    paint_coverage: FloatProperty(
+        name="Mark Chance",
+        description="Chance that a passing brush actually deposits a mark",
+        default=0.82,
+        min=0.0,
+        max=1.0,
+        subtype="FACTOR",
+    )
+    opacity_mode: EnumProperty(name="Opacity Pattern", items=OPACITY_ITEMS, default="FADE_PATH")
+    opacity_min: FloatProperty(
+        name="Faintest Mark",
+        default=0.15,
+        min=0.02,
+        max=1.0,
+        subtype="FACTOR",
+    )
+    opacity_max: FloatProperty(
+        name="Strongest Mark",
+        default=0.95,
+        min=0.02,
+        max=1.0,
+        subtype="FACTOR",
+    )
+    opacity_scale: FloatProperty(
+        name="Opacity Patch Size",
+        description="Size of faint and strong regions when Opacity Pattern is Clouds",
+        default=0.72,
+        min=0.05,
+        max=3.0,
     )
     palette: EnumProperty(name="Palette", items=PALETTE_ITEMS, default="ELECTRIC")
     metallic: FloatProperty(name="Metallic", default=0.28, min=0.0, max=1.0, subtype="FACTOR")
@@ -159,7 +196,7 @@ class FLOWFIELD_PG_settings(PropertyGroup):
         min=-80.0,
         max=80.0,
     )
-    camera_distance: FloatProperty(name="Camera Distance", default=16.9, min=3.0, max=50.0)
+    camera_distance: FloatProperty(name="Camera Distance", default=13.8, min=3.0, max=50.0)
     camera_lens: FloatProperty(name="Camera Lens", default=57.0, min=18.0, max=150.0)
     render_size: IntProperty(
         name="Image Size",
@@ -183,18 +220,21 @@ def settings_from_scene(scene: bpy.types.Scene) -> FlowSettings:
         seed=props.seed,
         agents=props.agents,
         steps=props.steps,
-        growth_frames=props.growth_frames,
-        capture_frame=scene.frame_current,
-        waves=props.waves,
         field_scale=props.field_scale,
         step_size=props.step_size,
         inertia=props.inertia,
         noise_strength=props.noise_strength,
         orbit_strength=props.orbit_strength,
-        center_strength=props.center_strength,
-        lift_strength=props.lift_strength,
-        bounds_radius=props.bounds_radius,
         trail_radius=props.trail_radius,
+        canvas_radius=props.canvas_radius,
+        mark_spacing=props.mark_spacing,
+        mark_length=props.mark_length,
+        paint_coverage=props.paint_coverage,
+        opacity_mode=props.opacity_mode,
+        opacity_min=min(props.opacity_min, props.opacity_max),
+        opacity_max=max(props.opacity_min, props.opacity_max),
+        opacity_scale=props.opacity_scale,
+        show_canvas=props.show_canvas,
         palette=props.palette,
         metallic=props.metallic,
         roughness=props.roughness,
@@ -216,24 +256,16 @@ def set_view_to_camera(context: bpy.types.Context) -> None:
             area.spaces.active.region_3d.view_perspective = "CAMERA"
 
 
-def play_from_start(context: bpy.types.Context) -> None:
-    context.scene.frame_set(context.scene.frame_start)
-    if context.screen is not None and not context.screen.is_animation_playing:
-        bpy.ops.screen.animation_play()
-
-
-def generate_and_play(context: bpy.types.Context) -> None:
+def generate_full_painting(context: bpy.types.Context) -> None:
     scene = context.scene
     props = scene.flow_field_settings
     settings = settings_from_scene(scene)
     build(scene, settings)
     scene["flow_field_seed"] = props.seed
     scene["flow_field_has_generation"] = True
-    scene.frame_set(scene.frame_start)
+    scene.frame_set(1)
     set_view_to_camera(context)
-    props.status = f"Seed {props.seed} is cooking"
-    if context.screen is not None and not context.screen.is_animation_playing:
-        bpy.ops.screen.animation_play()
+    props.status = f"Seed {props.seed} is fully painted"
 
 
 def unique_path(path: Path) -> Path:
@@ -246,20 +278,104 @@ def unique_path(path: Path) -> Path:
     raise RuntimeError(f"Could not choose a unique filename near {path}")
 
 
+def apply_preset(props: FLOWFIELD_PG_settings) -> None:
+    if props.preset == "BRAIDED":
+        values = {
+            "agents": 48,
+            "steps": 420,
+            "field_scale": 0.18,
+            "step_size": 0.06,
+            "inertia": 0.965,
+            "noise_strength": 0.68,
+            "orbit_strength": 0.92,
+            "mark_spacing": 3,
+            "mark_length": 0.22,
+            "paint_coverage": 0.9,
+            "trail_radius": 0.026,
+            "opacity_mode": "PULSE",
+            "opacity_min": 0.12,
+            "opacity_max": 0.95,
+        }
+    elif props.preset == "STORM":
+        values = {
+            "agents": 120,
+            "steps": 300,
+            "field_scale": 0.58,
+            "step_size": 0.075,
+            "inertia": 0.74,
+            "noise_strength": 1.65,
+            "orbit_strength": 0.18,
+            "mark_spacing": 5,
+            "mark_length": 0.085,
+            "paint_coverage": 0.62,
+            "trail_radius": 0.03,
+            "opacity_mode": "FIELD",
+            "opacity_min": 0.08,
+            "opacity_max": 0.88,
+        }
+    elif props.preset == "CONSTELLATION":
+        values = {
+            "agents": 90,
+            "steps": 220,
+            "field_scale": 0.4,
+            "step_size": 0.085,
+            "inertia": 0.84,
+            "noise_strength": 1.15,
+            "orbit_strength": 0.38,
+            "mark_spacing": 9,
+            "mark_length": 0.012,
+            "paint_coverage": 0.46,
+            "trail_radius": 0.055,
+            "opacity_mode": "FIELD",
+            "opacity_min": 0.2,
+            "opacity_max": 1.0,
+        }
+    else:
+        values = {
+            "agents": 70,
+            "steps": 260,
+            "field_scale": 0.22,
+            "step_size": 0.065,
+            "inertia": 0.93,
+            "noise_strength": 0.85,
+            "orbit_strength": 0.65,
+            "mark_spacing": 4,
+            "mark_length": 0.16,
+            "paint_coverage": 0.82,
+            "trail_radius": 0.035,
+            "opacity_mode": "FADE_PATH",
+            "opacity_min": 0.15,
+            "opacity_max": 0.95,
+        }
+    for name, value in values.items():
+        setattr(props, name, value)
+
+
+class FLOWFIELD_OT_apply_preset(Operator):
+    bl_idname = "flow_field.apply_preset"
+    bl_label = "Apply Preset & Paint"
+    bl_description = "Load a curated group of understandable settings and generate the full result"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        apply_preset(context.scene.flow_field_settings)
+        return FLOWFIELD_OT_generate.execute(self, context)
+
+
 class FLOWFIELD_OT_generate(Operator):
     bl_idname = "flow_field.generate"
-    bl_label = "Generate & Play"
-    bl_description = "Rebuild the painting from these controls and start cooking at frame 1"
+    bl_label = "Generate Full Painting"
+    bl_description = "Rebuild the complete surface painting from these controls"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         try:
-            generate_and_play(context)
+            generate_full_painting(context)
         except Exception as exc:
             context.scene.flow_field_settings.status = f"Generation failed: {exc}"
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        self.report({"INFO"}, "Flow painting generated; press Pause whenever it looks right")
+        self.report({"INFO"}, "Complete surface painting generated")
         return {"FINISHED"}
 
 
@@ -277,7 +393,7 @@ class FLOWFIELD_OT_new_seed(Operator):
 class FLOWFIELD_OT_mutate(Operator):
     bl_idname = "flow_field.mutate"
     bl_label = "Mutate Knobs"
-    bl_description = "Nudge several motion controls while keeping the current seed"
+    bl_description = "Nudge several understandable paint controls while keeping the current seed"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context: bpy.types.Context) -> set[str]:
@@ -286,49 +402,16 @@ class FLOWFIELD_OT_mutate(Operator):
         props.field_scale = max(0.03, min(1.5, props.field_scale * rng.uniform(0.78, 1.22)))
         props.inertia = max(0.0, min(0.98, props.inertia + rng.uniform(-0.08, 0.08)))
         props.orbit_strength = max(-2.0, min(2.0, props.orbit_strength + rng.uniform(-0.22, 0.22)))
-        props.center_strength = max(0.0, min(2.0, props.center_strength * rng.uniform(0.75, 1.3)))
-        props.lift_strength = max(-1.0, min(1.0, props.lift_strength + rng.uniform(-0.12, 0.12)))
+        props.mark_spacing = max(1, min(30, props.mark_spacing + rng.choice((-1, 0, 1))))
+        props.mark_length = max(0.005, min(0.8, props.mark_length * rng.uniform(0.8, 1.25)))
+        props.paint_coverage = max(0.05, min(1.0, props.paint_coverage + rng.uniform(-0.12, 0.12)))
         return FLOWFIELD_OT_generate.execute(self, context)
-
-
-class FLOWFIELD_OT_replay(Operator):
-    bl_idname = "flow_field.replay"
-    bl_label = "Replay"
-    bl_description = "Return to frame 1 and play the current painting again"
-
-    @classmethod
-    def poll(cls, context: bpy.types.Context) -> bool:
-        return bool(context.scene.get("flow_field_has_generation"))
-
-    def execute(self, context: bpy.types.Context) -> set[str]:
-        play_from_start(context)
-        context.scene.flow_field_settings.status = "Replaying from frame 1"
-        return {"FINISHED"}
-
-
-class FLOWFIELD_OT_pause_resume(Operator):
-    bl_idname = "flow_field.pause_resume"
-    bl_label = "Pause / Resume"
-    bl_description = "Pause at an interesting moment or continue cooking"
-
-    @classmethod
-    def poll(cls, context: bpy.types.Context) -> bool:
-        return bool(context.scene.get("flow_field_has_generation")) and context.screen is not None
-
-    def execute(self, context: bpy.types.Context) -> set[str]:
-        if context.screen.is_animation_playing:
-            bpy.ops.screen.animation_cancel(restore_frame=False)
-            context.scene.flow_field_settings.status = f"Paused at frame {context.scene.frame_current}"
-        else:
-            bpy.ops.screen.animation_play()
-            context.scene.flow_field_settings.status = "Cooking"
-        return {"FINISHED"}
 
 
 class FLOWFIELD_OT_freeze(Operator):
     bl_idname = "flow_field.freeze"
-    bl_label = "Freeze This Moment"
-    bl_description = "Preserve the visible trails at this frame as separate editable mesh objects"
+    bl_label = "Make Mesh Copy"
+    bl_description = "Preserve a converted mesh copy while leaving the editable paint marks intact"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -343,15 +426,15 @@ class FLOWFIELD_OT_freeze(Operator):
         except Exception as exc:
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        context.scene.flow_field_settings.status = f"Saved {capture.name} inside this Blender file"
-        self.report({"INFO"}, f"Frozen as {capture.name}")
+        context.scene.flow_field_settings.status = f"Saved mesh copy {capture.name}"
+        self.report({"INFO"}, f"Mesh copy saved as {capture.name}")
         return {"FINISHED"}
 
 
 class FLOWFIELD_OT_render(Operator):
     bl_idname = "flow_field.render"
     bl_label = "Render PNG"
-    bl_description = "Render the current cooking frame and save its exact recipe"
+    bl_description = "Render the full surface painting and save its exact recipe"
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -371,7 +454,7 @@ class FLOWFIELD_OT_render(Operator):
             else:
                 output_dir = Path(bpy.app.tempdir).resolve() / "flow_field_renders"
             output_dir.mkdir(parents=True, exist_ok=True)
-            stem = f"flow_seed_{props.seed:06d}_frame_{scene.frame_current:04d}"
+            stem = f"surface_paint_seed_{props.seed:06d}"
             render_path = unique_path(output_dir / f"{stem}.png")
             recipe_path = render_path.with_suffix(".json")
             settings = settings_from_scene(scene)
@@ -384,7 +467,7 @@ class FLOWFIELD_OT_render(Operator):
             return {"CANCELLED"}
 
         scene["flow_field_last_render"] = str(render_path)
-        props.status = f"Rendered frame {scene.frame_current} to {render_path.name}"
+        props.status = f"Rendered full painting to {render_path.name}"
         self.report({"INFO"}, f"Saved {render_path}")
         return {"FINISHED"}
 
@@ -403,36 +486,36 @@ class FLOWFIELD_PT_main(Panel):
         has_generation = bool(scene.get("flow_field_has_generation"))
 
         intro = layout.box()
-        intro.label(text="Same seed + same knobs = same painting", icon="INFO")
+        intro.label(text="Paths guide paint; the paths stay invisible", icon="INFO")
+        intro.label(text="Every Generate makes the full result")
 
         choose = layout.box()
-        choose.label(text="1. Choose the starting conditions")
+        choose.label(text="1. Start from something understandable")
+        choose.prop(props, "preset")
+        choose.operator("flow_field.apply_preset", icon="PRESET")
         choose.prop(props, "seed")
         row = choose.row(align=True)
-        row.scale_y = 1.35
-        row.operator("flow_field.generate", icon="PLAY")
         row.operator("flow_field.new_seed", text="New Seed", icon="FILE_REFRESH")
-        choose.operator("flow_field.mutate", icon="MOD_NOISE")
+        row.operator("flow_field.mutate", text="Mutate", icon="MOD_NOISE")
 
-        cook = layout.box()
-        cook.enabled = has_generation
-        cook.label(text="2. Let it cook, then pause")
-        cook.prop(scene, "frame_current", text="Cooking Frame", slider=True)
-        row = cook.row(align=True)
-        row.operator("flow_field.replay", icon="LOOP_BACK")
-        playing = bool(context.screen and context.screen.is_animation_playing)
-        row.operator(
-            "flow_field.pause_resume",
-            text="Pause" if playing else "Resume",
-            icon="PAUSE" if playing else "PLAY",
-        )
+        paint = layout.box()
+        paint.label(text="2. Adjust the visible paint marks")
+        paint.prop(props, "palette")
+        paint.prop(props, "trail_radius")
+        paint.prop(props, "mark_length")
+        paint.prop(props, "mark_spacing")
+        paint.prop(props, "opacity_mode")
+        paint.label(text="Spacing high = fewer marks")
+        generate = paint.row()
+        generate.scale_y = 1.5
+        generate.operator("flow_field.generate", icon="BRUSH_DATA")
 
         keep = layout.box()
         keep.enabled = has_generation
-        keep.label(text="3. Keep what you like")
-        keep.operator("flow_field.freeze", icon="OUTLINER_DATA_MESH")
+        keep.label(text="3. Save the full painting")
         keep.prop(props, "output_dir")
         keep.operator("flow_field.render", icon="RENDER_STILL")
+        keep.operator("flow_field.freeze", icon="OUTLINER_DATA_MESH")
 
         status = layout.box()
         status.label(text=props.status, icon="DOT")
@@ -440,7 +523,7 @@ class FLOWFIELD_PT_main(Panel):
 
 class FLOWFIELD_PT_motion(Panel):
     bl_idname = "FLOWFIELD_PT_motion"
-    bl_label = "Motion Knobs"
+    bl_label = "Invisible Path Shape"
     bl_parent_id = "FLOWFIELD_PT_main"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -452,22 +535,19 @@ class FLOWFIELD_PT_motion(Panel):
         layout = self.layout
         layout.prop(props, "agents")
         layout.prop(props, "steps")
-        layout.prop(props, "growth_frames")
-        layout.prop(props, "waves")
-        layout.separator()
+        layout.label(text="More painters and longer paths add coverage")
         layout.prop(props, "field_scale")
-        layout.prop(props, "step_size")
+        layout.label(text="Low scale = broad bends; high = busy turns")
         layout.prop(props, "inertia")
+        layout.label(text="High smoothness = graceful curves")
         layout.prop(props, "noise_strength")
         layout.prop(props, "orbit_strength")
-        layout.prop(props, "center_strength")
-        layout.prop(props, "lift_strength")
-        layout.prop(props, "bounds_radius")
+        layout.prop(props, "step_size")
 
 
 class FLOWFIELD_PT_look(Panel):
     bl_idname = "FLOWFIELD_PT_look"
-    bl_label = "Look Knobs"
+    bl_label = "Paint, Opacity & Canvas"
     bl_parent_id = "FLOWFIELD_PT_main"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -478,7 +558,20 @@ class FLOWFIELD_PT_look(Panel):
         props = context.scene.flow_field_settings
         layout = self.layout
         layout.prop(props, "palette")
+        layout.prop(props, "canvas_radius")
+        layout.prop(props, "show_canvas")
+        layout.separator()
         layout.prop(props, "trail_radius")
+        layout.prop(props, "mark_length")
+        layout.prop(props, "mark_spacing")
+        layout.prop(props, "paint_coverage")
+        layout.separator()
+        layout.prop(props, "opacity_mode")
+        layout.prop(props, "opacity_min")
+        layout.prop(props, "opacity_max")
+        if props.opacity_mode == "FIELD":
+            layout.prop(props, "opacity_scale")
+        layout.separator()
         layout.prop(props, "metallic")
         layout.prop(props, "roughness")
         layout.prop(props, "emission_strength")
@@ -506,11 +599,10 @@ class FLOWFIELD_PT_camera(Panel):
 
 CLASSES = (
     FLOWFIELD_PG_settings,
+    FLOWFIELD_OT_apply_preset,
     FLOWFIELD_OT_generate,
     FLOWFIELD_OT_new_seed,
     FLOWFIELD_OT_mutate,
-    FLOWFIELD_OT_replay,
-    FLOWFIELD_OT_pause_resume,
     FLOWFIELD_OT_freeze,
     FLOWFIELD_OT_render,
     FLOWFIELD_PT_main,

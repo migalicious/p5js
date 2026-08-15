@@ -7,9 +7,10 @@ import math
 import random
 from dataclasses import asdict, dataclass
 
+import bmesh
 import bpy
 from mathutils import Vector
-from mathutils.noise import noise_vector
+from mathutils.noise import noise, noise_vector
 
 
 GENERATOR_TAG = "flow_field_painter"
@@ -58,27 +59,31 @@ PALETTES = {
 @dataclass(frozen=True)
 class FlowSettings:
     seed: int = 42
-    agents: int = 150
-    steps: int = 280
-    growth_frames: int = 180
-    capture_frame: int = 132
-    waves: int = 9
-    field_scale: float = 0.31
-    step_size: float = 0.067
-    inertia: float = 0.84
-    noise_strength: float = 1.0
-    orbit_strength: float = 0.42
-    center_strength: float = 0.23
-    lift_strength: float = 0.16
-    bounds_radius: float = 4.8
-    trail_radius: float = 0.023
+    agents: int = 70
+    steps: int = 260
+    field_scale: float = 0.22
+    step_size: float = 0.065
+    inertia: float = 0.93
+    noise_strength: float = 0.85
+    orbit_strength: float = 0.65
+    trail_radius: float = 0.035
+    canvas_radius: float = 4.0
+    mark_spacing: int = 4
+    mark_length: float = 0.16
+    paint_coverage: float = 0.82
+    opacity_mode: str = "FADE_PATH"
+    opacity_min: float = 0.15
+    opacity_max: float = 0.95
+    opacity_scale: float = 0.72
+    opacity_buckets: int = 6
+    show_canvas: bool = True
     palette: str = "ELECTRIC"
     metallic: float = 0.28
     roughness: float = 0.3
     emission_strength: float = 0.14
     camera_azimuth: float = 50.3
     camera_elevation: float = 31.5
-    camera_distance: float = 16.9
+    camera_distance: float = 13.8
     camera_lens: float = 57.0
     render_size: int = 768
 
@@ -131,159 +136,217 @@ def remove_live_generation(scene: bpy.types.Scene) -> None:
             bpy.data.materials.remove(material)
 
 
-def make_material(
+def make_paint_material(
     name: str,
     color_hex: str,
+    opacity: float,
     settings: FlowSettings,
 ) -> bpy.types.Material:
     color = hex_rgba(color_hex)
+    rgba = (*color[:3], opacity)
     material = bpy.data.materials.new(name)
     _tag(material)
-    material.diffuse_color = color
+    material.diffuse_color = rgba
+    material.surface_render_method = "DITHERED"
+    material.use_transparency_overlap = False
     principled = material.node_tree.nodes.get("Principled BSDF")
     principled.inputs["Base Color"].default_value = color
     principled.inputs["Metallic"].default_value = settings.metallic
     principled.inputs["Roughness"].default_value = settings.roughness
-    principled.inputs["Coat Weight"].default_value = 0.25
+    principled.inputs["Coat Weight"].default_value = 0.18
     principled.inputs["Emission Color"].default_value = color
     principled.inputs["Emission Strength"].default_value = settings.emission_strength
+    principled.inputs["Alpha"].default_value = opacity
     return material
 
 
-def initial_position(rng: random.Random, radius: float) -> Vector:
-    angle = rng.uniform(0, math.tau)
-    radial = radius * math.sqrt(rng.random()) * 0.78
-    return Vector(
-        (
-            math.cos(angle) * radial,
-            math.sin(angle) * radial,
-            rng.uniform(-radius * 0.48, radius * 0.48),
-        )
-    )
+def make_canvas_material() -> bpy.types.Material:
+    material = bpy.data.materials.new("Flow Canvas")
+    _tag(material)
+    color = (0.008, 0.012, 0.022, 1.0)
+    material.diffuse_color = color
+    principled = material.node_tree.nodes.get("Principled BSDF")
+    principled.inputs["Base Color"].default_value = color
+    principled.inputs["Metallic"].default_value = 0.12
+    principled.inputs["Roughness"].default_value = 0.68
+    return material
 
 
-def field_direction(position: Vector, settings: FlowSettings, seed_offset: Vector) -> Vector:
-    sample_position = position * settings.field_scale + seed_offset
-    field = noise_vector(sample_position, noise_basis="PERLIN_ORIGINAL")
-    field *= settings.noise_strength
-
-    planar = Vector((-position.y, position.x, 0.0))
-    if planar.length_squared > 1e-8:
-        field += planar.normalized() * settings.orbit_strength
-
-    distance = position.length
-    if distance > 1e-8:
-        center_weight = 0.3 + (distance / settings.bounds_radius) ** 2
-        field -= position.normalized() * settings.center_strength * center_weight
-
-    field.z += math.sin(position.x * 0.72 + position.y * 0.37) * settings.lift_strength
-    return field
+def _random_surface_position(rng: random.Random, radius: float) -> Vector:
+    z = rng.uniform(-1.0, 1.0)
+    angle = rng.uniform(0.0, math.tau)
+    planar = math.sqrt(max(0.0, 1.0 - z * z))
+    return Vector((planar * math.cos(angle), planar * math.sin(angle), z)) * radius
 
 
-def trace_agent(
-    rng: random.Random,
+def _surface_direction(
+    position: Vector,
+    velocity: Vector,
     settings: FlowSettings,
     seed_offset: Vector,
-) -> list[Vector]:
-    position = initial_position(rng, settings.bounds_radius)
-    velocity = Vector(
-        (rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-0.45, 0.45))
-    )
+) -> Vector:
+    normal = position.normalized()
+    sampled = noise_vector(position * settings.field_scale + seed_offset, noise_basis="PERLIN_ORIGINAL")
+    tangent_noise = sampled - normal * sampled.dot(normal)
+
+    around_axis = Vector((0.0, 0.0, 1.0)).cross(normal)
+    if around_axis.length_squared < 1e-8:
+        around_axis = Vector((1.0, 0.0, 0.0)).cross(normal)
+
+    desired = tangent_noise * settings.noise_strength + around_axis * settings.orbit_strength
+    desired -= normal * desired.dot(normal)
+    if desired.length_squared < 1e-10:
+        desired = around_axis
+    desired.normalize()
+
+    velocity -= normal * velocity.dot(normal)
     if velocity.length_squared < 1e-10:
-        velocity = Vector((1.0, 0.0, 0.0))
+        velocity = desired
     else:
         velocity.normalize()
-    points = [position.copy()]
-
-    for _ in range(settings.steps - 1):
-        desired = field_direction(position, settings, seed_offset)
-        if desired.length_squared < 1e-10:
-            desired = velocity
-        else:
-            desired.normalize()
-
-        velocity = velocity * settings.inertia + desired * (1.0 - settings.inertia)
-        velocity.normalize()
-        position = position + velocity * settings.step_size
-        points.append(position.copy())
-
-    return points
+    blended = velocity * settings.inertia + desired * (1.0 - settings.inertia)
+    blended -= normal * blended.dot(normal)
+    blended.normalize()
+    return blended
 
 
-def add_trail_spline(
+def _mark_opacity(
+    position: Vector,
+    progress: float,
+    phase: float,
+    settings: FlowSettings,
+    opacity_offset: Vector,
+) -> float:
+    if settings.opacity_mode == "UNIFORM":
+        amount = 1.0
+    elif settings.opacity_mode == "FADE_PATH":
+        amount = math.sin(math.pi * progress) ** 0.55
+    elif settings.opacity_mode == "PULSE":
+        amount = 0.5 + 0.5 * math.sin(progress * math.tau * 5.0 + phase)
+    else:
+        sampled = noise(
+            position * settings.opacity_scale + opacity_offset,
+            noise_basis="PERLIN_ORIGINAL",
+        )
+        amount = max(0.0, min(1.0, sampled * 0.5 + 0.5))
+    return settings.opacity_min + amount * (settings.opacity_max - settings.opacity_min)
+
+
+def add_surface_mark(
     curve: bpy.types.Curve,
-    points: list[Vector],
+    position: Vector,
+    tangent: Vector,
     material_index: int,
-    width_variation: float,
+    length: float,
+    width: float,
+    surface_radius: float,
 ) -> None:
+    half = tangent.normalized() * (length * 0.5)
+    start = (position - half).normalized() * surface_radius
+    end = (position + half).normalized() * surface_radius
     spline = curve.splines.new("POLY")
-    spline.points.add(len(points) - 1)
+    spline.points.add(1)
     spline.material_index = material_index
-    last = max(1, len(points) - 1)
-
-    for index, (spline_point, position) in enumerate(zip(spline.points, points)):
-        progress = index / last
-        taper = max(0.08, math.sin(math.pi * progress) ** 0.42)
-        spline_point.co = (*position, 1.0)
-        spline_point.radius = taper * width_variation
+    spline.points[0].co = (*start, 1.0)
+    spline.points[1].co = (*end, 1.0)
+    spline.points[0].radius = width
+    spline.points[1].radius = width
 
 
-def build_trails(
+def build_surface_paint(
     settings: FlowSettings,
     collection: bpy.types.Collection,
     materials: list[bpy.types.Material],
-) -> list[bpy.types.Object]:
+) -> bpy.types.Object:
     rng = random.Random(settings.seed)
-    seed_rng = random.Random(settings.seed ^ 0x5F3759DF)
-    seed_offset = Vector(tuple(seed_rng.uniform(-200, 200) for _ in range(3)))
+    offset_rng = random.Random(settings.seed ^ 0x5F3759DF)
+    seed_offset = Vector(tuple(offset_rng.uniform(-200, 200) for _ in range(3)))
+    opacity_offset = Vector(tuple(offset_rng.uniform(-200, 200) for _ in range(3)))
+    surface_radius = settings.canvas_radius + settings.trail_radius * 1.8
 
-    curves: list[bpy.types.Curve] = []
-    objects: list[bpy.types.Object] = []
-    for wave_index in range(settings.waves):
-        curve = bpy.data.curves.new(f"Flow Trails {wave_index + 1:02d}", "CURVE")
-        curve.dimensions = "3D"
-        curve.resolution_u = 2
-        curve.bevel_depth = settings.trail_radius
-        curve.bevel_resolution = 3
-        curve.use_fill_caps = True
-        curve.bevel_factor_start = 0.0
-        curve.bevel_factor_end = 0.0
-        for material in materials:
-            curve.materials.append(material)
+    curve = bpy.data.curves.new("Surface Paint Marks", "CURVE")
+    curve.dimensions = "3D"
+    curve.resolution_u = 1
+    curve.bevel_depth = settings.trail_radius
+    curve.bevel_resolution = 2
+    curve.use_fill_caps = True
+    for material in materials:
+        curve.materials.append(material)
 
-        obj = bpy.data.objects.new(curve.name, curve)
-        _tag(obj)
-        collection.objects.link(obj)
-        obj["flow_seed"] = settings.seed
-        obj["wave"] = wave_index
-        curves.append(curve)
-        objects.append(obj)
+    obj = bpy.data.objects.new(curve.name, curve)
+    _tag(obj)
+    obj["flow_seed"] = settings.seed
+    obj["role"] = "surface_paint"
+    collection.objects.link(obj)
 
+    bucket_count = max(2, settings.opacity_buckets)
     for agent_index in range(settings.agents):
-        wave_index = agent_index % settings.waves
-        palette_index = rng.randrange(len(materials))
-        width_variation = rng.uniform(0.62, 1.42)
-        points = trace_agent(rng, settings, seed_offset)
-        add_trail_spline(curves[wave_index], points, palette_index, width_variation)
+        position = _random_surface_position(rng, settings.canvas_radius)
+        normal = position.normalized()
+        velocity = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
+        velocity -= normal * velocity.dot(normal)
+        if velocity.length_squared < 1e-10:
+            velocity = Vector((0.0, 0.0, 1.0)).cross(normal)
+        velocity.normalize()
+        palette_index = rng.randrange(len(PALETTES.get(settings.palette, PALETTES["ELECTRIC"])))
+        phase = rng.uniform(0.0, math.tau)
 
-    for wave_index, curve in enumerate(curves):
-        start_frame = 1 + wave_index * 3
-        end_frame = start_frame + settings.growth_frames
-        curve.bevel_factor_end = 0.0
-        curve.keyframe_insert("bevel_factor_end", frame=start_frame)
-        curve.bevel_factor_end = 1.0
-        curve.keyframe_insert("bevel_factor_end", frame=end_frame)
+        for step_index in range(settings.steps):
+            velocity = _surface_direction(position, velocity, settings, seed_offset)
+            position = (position + velocity * settings.step_size).normalized() * settings.canvas_radius
 
-        animation_data = curve.animation_data
-        action = animation_data.action if animation_data else None
-        if action and action.layers:
-            strip = action.layers[0].strips[0]
-            channelbag = strip.channelbag(animation_data.action_slot)
-            for fcurve in channelbag.fcurves:
-                for keyframe in fcurve.keyframe_points:
-                    keyframe.interpolation = "LINEAR"
+            if step_index % max(1, settings.mark_spacing) != 0:
+                continue
+            if rng.random() > settings.paint_coverage:
+                continue
 
-    return objects
+            progress = step_index / max(1, settings.steps - 1)
+            opacity = _mark_opacity(position, progress, phase, settings, opacity_offset)
+            opacity_t = (opacity - settings.opacity_min) / max(
+                1e-8,
+                settings.opacity_max - settings.opacity_min,
+            )
+            bucket = max(0, min(bucket_count - 1, round(opacity_t * (bucket_count - 1))))
+            material_index = palette_index * bucket_count + bucket
+            mark_length = settings.mark_length * rng.uniform(0.72, 1.28)
+            mark_width = rng.uniform(0.72, 1.25)
+            add_surface_mark(
+                curve,
+                position,
+                velocity,
+                material_index,
+                mark_length,
+                mark_width,
+                surface_radius,
+            )
+
+    return obj
+
+
+def add_canvas(
+    collection: bpy.types.Collection,
+    settings: FlowSettings,
+) -> bpy.types.Object:
+    mesh = bpy.data.meshes.new("Flow Canvas")
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(
+        bm,
+        u_segments=96,
+        v_segments=64,
+        radius=settings.canvas_radius,
+        calc_uvs=True,
+    )
+    bm.to_mesh(mesh)
+    bm.free()
+    for polygon in mesh.polygons:
+        polygon.use_smooth = True
+
+    canvas = bpy.data.objects.new("Flow Canvas", mesh)
+    _tag(canvas)
+    canvas["role"] = "canvas"
+    collection.objects.link(canvas)
+    canvas.data.materials.append(make_canvas_material())
+    return canvas
 
 
 def add_camera(
@@ -350,7 +413,7 @@ def configure_scene(scene: bpy.types.Scene, settings: FlowSettings) -> None:
     scene.render.image_settings.color_depth = "8"
     scene.render.film_transparent = False
     scene.frame_start = 1
-    scene.frame_end = settings.growth_frames + settings.waves * 3
+    scene.frame_end = 1
 
     world = bpy.data.worlds.get("Flow Field World") or bpy.data.worlds.new("Flow Field World")
     _tag(world)
@@ -374,14 +437,28 @@ def build(scene: bpy.types.Scene, settings: FlowSettings) -> bpy.types.Collectio
     scene.collection.children.link(collection)
 
     palette = PALETTES.get(settings.palette, PALETTES["ELECTRIC"])
-    materials = [
-        make_material(f"Flow {index + 1:02d} #{color}", color, settings)
-        for index, color in enumerate(palette)
-    ]
-    build_trails(settings, collection, materials)
+    bucket_count = max(2, settings.opacity_buckets)
+    materials = []
+    for color_index, color in enumerate(palette):
+        for bucket in range(bucket_count):
+            opacity = settings.opacity_min + (bucket / (bucket_count - 1)) * (
+                settings.opacity_max - settings.opacity_min
+            )
+            materials.append(
+                make_paint_material(
+                    f"Paint {color_index + 1:02d} opacity {bucket + 1:02d}",
+                    color,
+                    opacity,
+                    settings,
+                )
+            )
+    if settings.show_canvas:
+        add_canvas(collection, settings)
+    build_surface_paint(settings, collection, materials)
     add_camera(scene, collection, settings)
     add_stage(collection)
-    scene.frame_set(min(max(settings.capture_frame, scene.frame_start), scene.frame_end))
+    scene.frame_set(1)
+    scene["paint_model"] = "surface_marks"
     return collection
 
 

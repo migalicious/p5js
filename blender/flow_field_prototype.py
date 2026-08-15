@@ -26,10 +26,8 @@ from flow_field_painter.generator import FlowSettings, build, recipe_json
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--agents", type=int, default=150)
-    parser.add_argument("--steps", type=int, default=280)
-    parser.add_argument("--capture-frame", type=int, default=132)
-    parser.add_argument("--growth-frames", type=int, default=180)
+    parser.add_argument("--agents", type=int, default=70)
+    parser.add_argument("--steps", type=int, default=260)
     parser.add_argument("--render-size", type=int, default=768)
     parser.add_argument("--output-dir", default="blender/output")
     parser.add_argument("--render", action="store_true")
@@ -43,13 +41,11 @@ def main() -> None:
         seed=args.seed,
         agents=max(1, args.agents),
         steps=max(2, args.steps),
-        growth_frames=max(2, args.growth_frames),
-        capture_frame=max(1, args.capture_frame),
         render_size=max(64, args.render_size),
     )
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"flow_field_seed_{settings.seed:04d}_frame_{settings.capture_frame:04d}"
+    stem = f"surface_paint_seed_{settings.seed:04d}"
     blend_path = output_dir / f"{stem}.blend"
     recipe_path = output_dir / f"{stem}.json"
     render_path = output_dir / f"{stem}.png"

@@ -30,8 +30,8 @@ def main() -> None:
     props.seed = 123
     props.agents = 12
     props.steps = 30
-    props.growth_frames = 24
-    props.waves = 3
+    props.mark_spacing = 3
+    props.paint_coverage = 0.8
     props.render_size = 128
     props.output_dir = str(OUTPUT_DIR)
 
@@ -43,8 +43,10 @@ def main() -> None:
         and collection.get("role") == "live"
     )
     curves = [obj for obj in live.objects if obj.type == "CURVE"]
-    assert len(curves) == 3
-    assert sum(len(obj.data.splines) for obj in curves) == 12
+    assert len(curves) == 1
+    painted_marks = sum(len(obj.data.splines) for obj in curves)
+    assert 1 <= painted_marks <= props.agents * props.steps
+    assert len([obj for obj in live.objects if obj.get("role") == "canvas"]) == 1
     assert bpy.data.objects.get(user_object.name) is user_object
 
     props.seed = 124
@@ -58,7 +60,7 @@ def main() -> None:
     assert len(live_collections) == 1
     assert bpy.data.objects.get(user_object.name) is user_object
 
-    scene.frame_set(12)
+    scene.frame_set(1)
     assert bpy.ops.flow_field.freeze() == {"FINISHED"}
     captures = [
         collection
@@ -68,7 +70,7 @@ def main() -> None:
     ]
     assert len(captures) == 1
     frozen_meshes = [obj for obj in captures[0].objects if obj.type == "MESH"]
-    assert len(frozen_meshes) == 3
+    assert len(frozen_meshes) == 1
     assert sum(len(obj.data.vertices) for obj in frozen_meshes) > 0
 
     assert bpy.ops.flow_field.render() == {"FINISHED"}
@@ -78,14 +80,14 @@ def main() -> None:
     assert recipe_path.is_file()
     recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
     assert recipe["seed"] == 124
-    assert recipe["capture_frame"] == 12
+    assert recipe["opacity_mode"] == props.opacity_mode
 
     print(
         "FLOW_FIELD_UI_VERIFIED",
         {
             "live_curves": len(curves),
-            "live_splines": 12,
-            "frozen_meshes": 3,
+            "painted_marks": painted_marks,
+            "frozen_meshes": 1,
             "user_object_preserved": True,
             "render": str(render_path),
         },

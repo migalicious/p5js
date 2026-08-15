@@ -25,10 +25,8 @@ def main() -> None:
     scene = bpy.context.scene
     props = scene.flow_field_settings
     props.seed = 42
-    props.agents = 150
-    props.steps = 280
-    props.growth_frames = 180
-    props.waves = 9
+    props.preset = "CALM"
+    flow_field_painter.apply_preset(props)
     props.palette = "ELECTRIC"
     props.render_size = 768
     props.output_dir = ""
@@ -37,8 +35,8 @@ def main() -> None:
     if result != {"FINISHED"}:
         raise RuntimeError(f"Starter generation failed: {result}")
 
-    scene.frame_set(132)
-    props.status = "Paused at frame 132 — replay it or start changing knobs"
+    scene.frame_set(1)
+    props.status = "Fully painted — try a preset, new seed, or visible paint knob"
 
     for screen in bpy.data.screens:
         for area in screen.areas:
@@ -49,7 +47,7 @@ def main() -> None:
     starter_path = BLENDER_DIR / "flow_field_painter_starter.blend"
     preview_dir = BLENDER_DIR / "previews"
     preview_dir.mkdir(parents=True, exist_ok=True)
-    preview_path = preview_dir / "flow_field_painter_v2.png"
+    preview_path = preview_dir / "flow_field_painter_v3.png"
     scene.render.filepath = str(preview_path)
 
     bpy.ops.wm.save_as_mainfile(filepath=str(starter_path))

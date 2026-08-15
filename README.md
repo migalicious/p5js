@@ -84,8 +84,9 @@ open color_flow_field.html
 
 The [Blender prototypes](blender/README.md) turn the sketches' generative rules
 into editable scenes and geometry. Flow Field Painter includes an installable
-Blender sidebar: seeded agents leave tapered trails that accumulate across the
-timeline, then any interesting frame can be frozen or rendered.
+Blender sidebar: invisible seeded paths deposit separate paint marks across a
+three-dimensional canvas, with presets and controls for flow, spacing, brush
+shape, opacity, materials, and camera.
 
 ## Thumbnails
 

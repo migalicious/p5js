@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "flow_field_painter"
-version = "0.2.0"
+version = "0.3.0"
 name = "Flow Field Painter"
-tagline = "Grow and capture seeded three-dimensional flow paintings"
+tagline = "Paint seeded surface patterns from invisible flow paths"
 maintainer = "migalicious"
 type = "add-on"
 website = "https://github.com/migalicious/p5js"
