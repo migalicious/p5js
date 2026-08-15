@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+
+id = "flow_field_painter"
+version = "0.2.0"
+name = "Flow Field Painter"
+tagline = "Grow and capture seeded three-dimensional flow paintings"
+maintainer = "migalicious"
+type = "add-on"
+website = "https://github.com/migalicious/p5js"
+
+blender_version_min = "5.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+[permissions]
+files = "Save renders and recipes to a user-selected directory"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "*.pyc",
+  "/*.zip",
+]

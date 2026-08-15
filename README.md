@@ -83,9 +83,9 @@ open color_flow_field.html
 ## Blender experiments
 
 The [Blender prototypes](blender/README.md) turn the sketches' generative rules
-into editable scenes and geometry. The first prototype is an animated 3D
-flow-field painting: seeded agents leave tapered trails that accumulate across
-Blender's timeline and can be captured at any frame.
+into editable scenes and geometry. Flow Field Painter includes an installable
+Blender sidebar: seeded agents leave tapered trails that accumulate across the
+timeline, then any interesting frame can be frozen or rendered.
 
 ## Thumbnails
 
