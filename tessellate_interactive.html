@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tessellate</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #sketch-container { position:fixed; top:0; left:0; width:100%; height:100%; }
+  #sketch-container canvas { display:block; width:100% !important; height:100% !important; }
+</style>
+</head>
+<body>
+
+<div id="sketch-container"></div>
+
+<div id="header">
+  <h1>tessellate</h1>
+  <span id="status">● live</span>
+</div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <div class="section">
+    <div class="section-label">tiles</div>
+    <div class="ctrl">
+      <label>tile type</label>
+      <select id="tileType">
+        <option value="hex" selected>hexagon prism</option>
+        <option value="tri">triangle prism</option>
+        <option value="square">square prism</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>grid size</label>
+      <select id="gridSize">
+        <option value="8">small — 8</option>
+        <option value="14" selected>medium — 14</option>
+        <option value="20">large — 20</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>tile gap</label>
+      <div class="ctrl-row">
+        <input type="range" id="tileGap" min="0" max="0.25" value="0.05" step="0.005">
+        <span class="val" id="tileGapV">0.050</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">animation</div>
+    <div class="ctrl"><label>anim speed</label>
+      <div class="ctrl-row">
+        <input type="range" id="animSpeed" min="0" max="0.05" value="0.008" step="0.001">
+        <span class="val" id="animSpeedV">0.008</span>
+      </div>
+    </div>
+    <div class="ctrl"><label>extrude height</label>
+      <div class="ctrl-row">
+        <input type="range" id="extrudeHeight" min="20" max="300" value="120" step="5">
+        <span class="val" id="extrudeHeightV">120</span>
+      </div>
+    </div>
+    <div class="ctrl"><label>noise scale</label>
+      <div class="ctrl-row">
+        <input type="range" id="noiseScale" min="0.03" max="0.15" value="0.07" step="0.005">
+        <span class="val" id="noiseScaleV">0.070</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">appearance</div>
+    <div class="ctrl">
+      <label>palette</label>
+      <select id="palette">
+        <option value="ember" selected>ember — orange / red</option>
+        <option value="ocean">ocean — teal / blue</option>
+        <option value="forest">forest — green / gold</option>
+        <option value="mono">mono — grey / white</option>
+      </select>
+    </div>
+    <div class="ctrl">
+      <label>wireframe</label>
+      <button id="wireframeBtn">off</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <div class="btn-row">
+      <button class="primary" id="reseedBtn">reseed<kbd>r</kbd></button>
+      <button id="pauseBtn">pause<kbd>space</kbd></button>
+    </div>
+    <div class="btn-row">
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+      <button class="export-btn" id="exportBtn">save PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Helpers ────────────────────────────────────────────────────────────────
+function pv(id) {
+  const el = document.getElementById(id);
+  const dsp = document.getElementById(id + 'V');
+  if (dsp) {
+    const fmt = v => parseFloat(el.step) < 0.01
+      ? parseFloat(v).toFixed(3)
+      : parseFloat(el.step) < 1 ? parseFloat(v).toFixed(3) : v;
+    dsp.textContent = fmt(el.value);
+    el.addEventListener('input', () => { dsp.textContent = fmt(el.value); });
+  }
+  return () => parseFloat(el.value);
+}
+
+const getTileGap     = pv('tileGap');
+const getAnimSpeed   = pv('animSpeed');
+const getExtrudeH    = pv('extrudeHeight');
+const getNoiseScale  = pv('noiseScale');
+
+// ── Panel / keyboard wiring ────────────────────────────────────────────────
+const panel    = document.getElementById('panel');
+const statusEl = document.getElementById('status');
+const pauseBtn = document.getElementById('pauseBtn');
+
+document.getElementById('toggle-panel').addEventListener('click', () =>
+  panel.classList.toggle('hidden')
+);
+
+let paused = false;
+pauseBtn.addEventListener('click', () => {
+  paused = !paused;
+  pauseBtn.classList.toggle('active', paused);
+  pauseBtn.innerHTML = (paused ? 'resume' : 'pause') + '<kbd>space</kbd>';
+  statusEl.textContent = paused ? '⏸ paused' : '● live';
+});
+
+let wireframeOn = false;
+const wireframeBtn = document.getElementById('wireframeBtn');
+wireframeBtn.addEventListener('click', () => {
+  wireframeOn = !wireframeOn;
+  wireframeBtn.textContent = wireframeOn ? 'on' : 'off';
+  wireframeBtn.classList.toggle('active', wireframeOn);
+});
+
+document.getElementById('reseedBtn').addEventListener('click', () => {
+  if (window._sketchReseed) window._sketchReseed();
+});
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (window._sketchExport) window._sketchExport();
+});
+document.getElementById('fullscreenBtn').addEventListener('click', () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { e.preventDefault(); pauseBtn.click(); }
+  if (e.code === 'KeyR')  document.getElementById('reseedBtn').click();
+  if (e.code === 'KeyF')  document.getElementById('fullscreenBtn').click();
+});
+
+// Rebuild grid when tile type or size changes
+['tileType', 'gridSize'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (window._sketchRebuild) window._sketchRebuild();
+  });
+});
+
+// ── Noise (from CLAUDE.md) ─────────────────────────────────────────────────
+function hash(x, y) { let n = Math.sin(x*127.1+y*311.7)*43758.5453; return n-(n|0); }
+function noise(x, y) {
+  const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
+  const s=fx*fx*(3-2*fx), t=fy*fy*(3-2*fy);
+  return hash(ix,iy)*(1-s)*(1-t)+hash(ix+1,iy)*s*(1-t)+hash(ix,iy+1)*(1-s)*t+hash(ix+1,iy+1)*s*t;
+}
+
+// ── Palettes ───────────────────────────────────────────────────────────────
+const PALETTES = {
+  ember:  [[255,60,10],[255,130,20],[240,200,40],[255,240,180]],
+  ocean:  [[10,60,140],[20,140,180],[40,200,200],[160,235,240]],
+  forest: [[20,70,30],[50,130,40],[100,170,30],[190,160,20]],
+  mono:   [[40,40,50],[100,100,115],[175,175,190],[240,240,248]],
+};
+
+function paletteSample(name, t) {
+  const pal = PALETTES[name] || PALETTES.ember;
+  const scaled = t * (pal.length - 1);
+  const i = Math.min(Math.floor(scaled), pal.length - 2);
+  const f = scaled - i;
+  return [
+    pal[i][0] + (pal[i+1][0]-pal[i][0]) * f,
+    pal[i][1] + (pal[i+1][1]-pal[i][1]) * f,
+    pal[i][2] + (pal[i+1][2]-pal[i][2]) * f,
+  ];
+}
+
+// ── Geometry builders ──────────────────────────────────────────────────────
+function buildSquareGeom(p) {
+  return p.buildGeometry(() => {
+    const h = 0.5;
+    // bottom (normal -Z, CW from below)
+    p.beginShape(); p.vertex(-h,-h,0); p.vertex( h,-h,0); p.vertex( h, h,0); p.vertex(-h, h,0); p.endShape(p.CLOSE);
+    // top (normal +Z, CCW from above)
+    p.beginShape(); p.vertex(-h,-h,1); p.vertex(-h, h,1); p.vertex( h, h,1); p.vertex( h,-h,1); p.endShape(p.CLOSE);
+    // sides
+    p.beginShape(); p.vertex(-h, h,0); p.vertex( h, h,0); p.vertex( h, h,1); p.vertex(-h, h,1); p.endShape(p.CLOSE);
+    p.beginShape(); p.vertex( h,-h,0); p.vertex(-h,-h,0); p.vertex(-h,-h,1); p.vertex( h,-h,1); p.endShape(p.CLOSE);
+    p.beginShape(); p.vertex( h, h,0); p.vertex( h,-h,0); p.vertex( h,-h,1); p.vertex( h, h,1); p.endShape(p.CLOSE);
+    p.beginShape(); p.vertex(-h,-h,0); p.vertex(-h, h,0); p.vertex(-h, h,1); p.vertex(-h,-h,1); p.endShape(p.CLOSE);
+  });
+}
+
+function buildHexGeom(p) {
+  return p.buildGeometry(() => {
+    const N = 6;
+    const vx = [], vy = [];
+    for (let k = 0; k < N; k++) {
+      vx[k] = Math.cos(k * Math.PI * 2 / N);
+      vy[k] = Math.sin(k * Math.PI * 2 / N);
+    }
+    // caps — explicit triangles, no TRIANGLE_FAN
+    p.beginShape(p.TRIANGLES);
+    for (let k = 0; k < N; k++) {
+      const n = (k + 1) % N;
+      // bottom (winding CW from below → CCW from outside = -Z)
+      p.vertex(0, 0, 0); p.vertex(vx[n], vy[n], 0); p.vertex(vx[k], vy[k], 0);
+      // top (winding CCW from above = +Z)
+      p.vertex(0, 0, 1); p.vertex(vx[k], vy[k], 1); p.vertex(vx[n], vy[n], 1);
+    }
+    p.endShape();
+    // 6 side quads
+    for (let k = 0; k < N; k++) {
+      const n = (k + 1) % N;
+      p.beginShape();
+      p.vertex(vx[k], vy[k], 0); p.vertex(vx[n], vy[n], 0);
+      p.vertex(vx[n], vy[n], 1); p.vertex(vx[k], vy[k], 1);
+      p.endShape(p.CLOSE);
+    }
+  });
+}
+
+function buildTriGeom(p) {
+  return p.buildGeometry(() => {
+    const sq3h = Math.sqrt(3) / 2;
+    const ax=0, ay=1, bx=-sq3h, by=-0.5, cx=sq3h, cy=-0.5;
+    // caps — explicit triangles
+    p.beginShape(p.TRIANGLES);
+    // bottom (CCW from -Z outside)
+    p.vertex(ax,ay,0); p.vertex(cx,cy,0); p.vertex(bx,by,0);
+    // top (CCW from +Z outside)
+    p.vertex(ax,ay,1); p.vertex(bx,by,1); p.vertex(cx,cy,1);
+    p.endShape();
+    // 3 sides
+    const vts = [[ax,ay],[bx,by],[cx,cy]];
+    for (let k = 0; k < 3; k++) {
+      const n = (k+1) % 3;
+      p.beginShape();
+      p.vertex(vts[k][0],vts[k][1],0); p.vertex(vts[n][0],vts[n][1],0);
+      p.vertex(vts[n][0],vts[n][1],1); p.vertex(vts[k][0],vts[k][1],1);
+      p.endShape(p.CLOSE);
+    }
+  });
+}
+
+// ── Grid calculators ───────────────────────────────────────────────────────
+function hexGrid(gridN, tileR) {
+  const tiles = [];
+  const colStep = tileR * Math.sqrt(3);
+  const rowStep = tileR * 1.5;
+  const rows = Math.ceil(gridN * 1.15);
+  const originX = -(gridN - 1) * colStep / 2;
+  const originY = -(rows - 1) * rowStep / 2;
+  for (let row = 0; row < rows; row++) {
+    const xOff = (row % 2 === 1) ? colStep / 2 : 0;
+    for (let col = 0; col < gridN; col++) {
+      tiles.push({ x: originX + col * colStep + xOff, y: originY + row * rowStep, flip: false, gi: col, gj: row });
+    }
+  }
+  return tiles;
+}
+
+function triGrid(gridN, tileR) {
+  const tiles = [];
+  const side = tileR * Math.sqrt(3);
+  const h    = side * Math.sqrt(3) / 2;
+  const half = side / 2;
+  const cOff = h / 3;
+  const cols = gridN * 2;
+  const rows = Math.ceil(gridN * 0.9);
+  const originX = -(cols * half) / 2;
+  const originY = -(rows * h) / 2;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const flip = (col % 2 === 1);
+      const cx = originX + col * half + half / 2;
+      const cy = originY + row * h + (flip ? h - cOff : cOff);
+      tiles.push({ x: cx, y: cy, flip, gi: col, gj: row });
+    }
+  }
+  return tiles;
+}
+
+function squareGrid(gridN, tileR) {
+  const tiles = [];
+  const step = tileR * 2;
+  const originX = -(gridN - 1) * step / 2;
+  const originY = -(gridN - 1) * step / 2;
+  for (let row = 0; row < gridN; row++) {
+    for (let col = 0; col < gridN; col++) {
+      tiles.push({ x: originX + col * step, y: originY + row * step, flip: false, gi: col, gj: row });
+    }
+  }
+  return tiles;
+}
+
+function calcTileR(tileType, gridN, W) {
+  if (tileType === 'hex')    return (W * 0.88) / (gridN * Math.sqrt(3));
+  if (tileType === 'tri')    return (W * 0.88) / (gridN * Math.sqrt(3));
+  return (W * 0.88) / (gridN * 2);
+}
+
+// ── p5 sketch ──────────────────────────────────────────────────────────────
+new p5(function(p) {
+  let geoms  = {};
+  let tiles  = [];
+  let tileR  = 1;
+  let t      = 0;
+  let seedOffset   = Math.random() * 9999;
+  let exportPending = false;
+
+  window._sketchReseed  = () => { seedOffset = Math.random() * 9999; };
+  window._sketchExport  = () => { exportPending = true; };
+  window._sketchRebuild = () => rebuildGrid();
+
+  p.setup = function() {
+    const cnv = p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
+    cnv.parent('sketch-container');
+    p.perspective(p.PI / 3, p.width / p.height, 1, 20000);
+    geoms.hex    = buildHexGeom(p);
+    geoms.tri    = buildTriGeom(p);
+    geoms.square = buildSquareGeom(p);
+    rebuildGrid();
+  };
+
+  p.windowResized = function() {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+    p.perspective(p.PI / 3, p.width / p.height, 1, 20000);
+    rebuildGrid();
+  };
+
+  function rebuildGrid() {
+    const tileType = document.getElementById('tileType').value;
+    const gridN    = parseInt(document.getElementById('gridSize').value);
+    tileR = calcTileR(tileType, gridN, p.width);
+    if      (tileType === 'hex')    tiles = hexGrid(gridN, tileR);
+    else if (tileType === 'tri')    tiles = triGrid(gridN, tileR);
+    else                            tiles = squareGrid(gridN, tileR);
+  }
+
+  p.draw = function() {
+    if (paused) return;
+
+    p.background(10, 10, 14);
+    p.orbitControl();
+
+    // Angled view: tilt so Z-extruded prisms appear to rise upward
+    p.rotateX(-0.8);
+
+    // Lighting
+    p.ambientLight(55, 55, 65);
+    const la = t * 0.004;
+    p.directionalLight(220, 210, 200,  Math.cos(la), -0.75, Math.sin(la));
+    p.directionalLight(55, 75, 120, -Math.cos(la), 0.3, -Math.sin(la));
+
+    const tileType    = document.getElementById('tileType').value;
+    const paletteName = document.getElementById('palette').value;
+    const extH        = getExtrudeH();
+    const ns          = getNoiseScale();
+    const gap         = 1 - getTileGap();
+    const animOff     = t * getAnimSpeed();
+    const geom        = geoms[tileType];
+    if (!geom) return;
+
+    for (const tile of tiles) {
+      const nx  = tile.gi * ns + seedOffset + animOff;
+      const ny  = tile.gj * ns + seedOffset * 0.73;
+      const nv  = noise(nx, ny);
+      const h   = nv * extH + 8;
+
+      const [r, g, b] = paletteSample(paletteName, nv);
+
+      p.push();
+      p.translate(tile.x, tile.y, 0);
+      if (tile.flip) p.rotateZ(Math.PI);
+      p.scale(tileR * gap, tileR * gap, h);
+
+      if (wireframeOn) {
+        p.noFill();
+        p.stroke(r, g, b, 200);
+        p.strokeWeight(1.5 / (tileR * gap));
+      } else {
+        p.noStroke();
+        p.fill(r, g, b);
+      }
+
+      p.model(geom);
+      p.pop();
+    }
+
+    t++;
+
+    if (exportPending) {
+      p.saveCanvas('tessellate', 'png');
+      exportPending = false;
+    }
+  };
+
+}, 'sketch-container');
+</script>
+</body>
+</html>

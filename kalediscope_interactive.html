@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kaleidoscope</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<link rel="stylesheet" href="shared.css">
+<style>
+  #sketch-container { position:fixed; top:0; left:0; width:100%; height:100%; }
+  #sketch-container canvas { display:block; width:100% !important; height:100% !important; }
+</style>
+</head>
+<body>
+
+<div id="sketch-container"></div>
+
+<div id="header">
+  <h1>kaleidoscope</h1>
+  <span id="status">● live</span>
+</div>
+
+<button id="toggle-panel" title="toggle controls">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="2" y="4" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+    <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+  </svg>
+</button>
+
+<div id="panel">
+  <div class="panel-header">controls</div>
+
+  <!-- ANIMATION -->
+  <div class="section">
+    <div class="section-label">animation</div>
+    <div class="ctrl"><label>cycle duration — seconds</label>
+      <div class="ctrl-row"><input type="range" id="cycleDuration" min="10" max="120" value="78.5" step="0.5"><span class="val" id="cycleDurationV">78.5</span></div>
+    </div>
+    <div class="ctrl"><label>time speed</label>
+      <div class="ctrl-row"><input type="range" id="timeSpeed" min="0.005" max="0.2" value="0.05" step="0.005"><span class="val" id="timeSpeedV">0.050</span></div>
+    </div>
+    <div class="ctrl"><label>zoom pulse speed</label>
+      <div class="ctrl-row"><input type="range" id="zoomSpeed" min="0.01" max="0.5" value="0.1" step="0.01"><span class="val" id="zoomSpeedV">0.100</span></div>
+    </div>
+    <div class="ctrl"><label>zoom min</label>
+      <div class="ctrl-row"><input type="range" id="zoomMin" min="0.05" max="2.0" value="0.1" step="0.05"><span class="val" id="zoomMinV">0.100</span></div>
+    </div>
+    <div class="ctrl"><label>zoom max</label>
+      <div class="ctrl-row"><input type="range" id="zoomMax" min="0.5" max="6.0" value="3.0" step="0.1"><span class="val" id="zoomMaxV">3.0</span></div>
+    </div>
+    <div class="ctrl"><label>rotation start — % of cycle</label>
+      <div class="ctrl-row"><input type="range" id="rotStart" min="0" max="100" value="60" step="1"><span class="val" id="rotStartV">60</span></div>
+    </div>
+    <div class="ctrl"><label>max rotation — degrees</label>
+      <div class="ctrl-row"><input type="range" id="maxRot" min="0" max="360" value="90" step="5"><span class="val" id="maxRotV">90</span></div>
+    </div>
+  </div>
+
+  <!-- FRACTAL -->
+  <div class="section">
+    <div class="section-label">fractal</div>
+    <div class="ctrl"><label>iterations</label>
+      <div class="ctrl-row"><input type="range" id="maxIter" min="1" max="12" value="7" step="1"><span class="val" id="maxIterV">7</span></div>
+    </div>
+    <div class="ctrl"><label>mirror planes</label>
+      <div class="ctrl-row"><input type="range" id="numMirrors" min="3" max="8" value="6" step="1"><span class="val" id="numMirrorsV">6</span></div>
+    </div>
+    <div class="ctrl"><label>fold alignment offset</label>
+      <div class="ctrl-row"><input type="range" id="foldOffset" min="-3.14159" max="3.14159" value="1.5708" step="0.01"><span class="val" id="foldOffsetV">1.571</span></div>
+    </div>
+    <div class="ctrl"><label>shift base</label>
+      <div class="ctrl-row"><input type="range" id="shiftBase" min="0.2" max="1.5" value="0.8" step="0.05"><span class="val" id="shiftBaseV">0.800</span></div>
+    </div>
+    <div class="ctrl"><label>wobble speed</label>
+      <div class="ctrl-row"><input type="range" id="wobbleSpeed" min="0" max="6" value="2.0" step="0.1"><span class="val" id="wobbleSpeedV">2.0</span></div>
+    </div>
+    <div class="ctrl"><label>wobble amplitude</label>
+      <div class="ctrl-row"><input type="range" id="wobbleAmp" min="0" max="0.2" value="0.05" step="0.005"><span class="val" id="wobbleAmpV">0.050</span></div>
+    </div>
+  </div>
+
+  <!-- APPEARANCE -->
+  <div class="section">
+    <div class="section-label">appearance</div>
+    <div class="ctrl"><label>dust sharpness</label>
+      <div class="ctrl-row"><input type="range" id="dustSharpness" min="0.0" max="0.8" value="0.3" step="0.01"><span class="val" id="dustSharpnessV">0.300</span></div>
+    </div>
+    <div class="ctrl"><label>dust scale</label>
+      <div class="ctrl-row"><input type="range" id="dustScale" min="0.5" max="5.0" value="2.0" step="0.1"><span class="val" id="dustScaleV">2.0</span></div>
+    </div>
+    <div class="ctrl"><label>intensity exponent</label>
+      <div class="ctrl-row"><input type="range" id="intensityExp" min="0.3" max="3.0" value="1.5" step="0.1"><span class="val" id="intensityExpV">1.5</span></div>
+    </div>
+    <div class="ctrl"><label>dust glow</label>
+      <div class="ctrl-row"><input type="range" id="dustGlow" min="0.05" max="0.6" value="0.2" step="0.01"><span class="val" id="dustGlowV">0.200</span></div>
+    </div>
+    <div class="ctrl"><label>line thickness</label>
+      <div class="ctrl-row"><input type="range" id="lineThick" min="0.01" max="0.5" value="0.1" step="0.005"><span class="val" id="lineThickV">0.100</span></div>
+    </div>
+    <div class="ctrl"><label>line flicker speed</label>
+      <div class="ctrl-row"><input type="range" id="lineFlicker" min="0" max="30" value="10" step="0.5"><span class="val" id="lineFlickerV">10.0</span></div>
+    </div>
+    <div class="ctrl"><label>line intensity</label>
+      <div class="ctrl-row"><input type="range" id="lineIntensity" min="0.1" max="2.0" value="0.5" step="0.05"><span class="val" id="lineIntensityV">0.50</span></div>
+    </div>
+    <div class="ctrl"><label>master brightness</label>
+      <div class="ctrl-row"><input type="range" id="brightness" min="0.1" max="2.0" value="0.8" step="0.05"><span class="val" id="brightnessV">0.80</span></div>
+    </div>
+    <div class="ctrl"><label>vignette range</label>
+      <div class="ctrl-row"><input type="range" id="vignette" min="0.5" max="12" value="5.0" step="0.1"><span class="val" id="vignetteV">5.0</span></div>
+    </div>
+  </div>
+
+  <!-- PALETTE -->
+  <div class="section">
+    <div class="section-label">palette</div>
+    <div class="ctrl"><label>baseline brightness</label>
+      <div class="ctrl-row"><input type="range" id="palA" min="0.1" max="0.9" value="0.5" step="0.01"><span class="val" id="palAV">0.500</span></div>
+    </div>
+    <div class="ctrl"><label>contrast</label>
+      <div class="ctrl-row"><input type="range" id="palB" min="0.1" max="0.9" value="0.5" step="0.01"><span class="val" id="palBV">0.500</span></div>
+    </div>
+    <div class="ctrl"><label>color layer step</label>
+      <div class="ctrl-row"><input type="range" id="colorStep" min="0.0" max="0.5" value="0.1" step="0.01"><span class="val" id="colorStepV">0.100</span></div>
+    </div>
+    <div class="ctrl"><label>distance color influence</label>
+      <div class="ctrl-row"><input type="range" id="distColor" min="0.0" max="0.5" value="0.2" step="0.01"><span class="val" id="distColorV">0.200</span></div>
+    </div>
+    <div class="ctrl"><label>seed color influence</label>
+      <div class="ctrl-row"><input type="range" id="seedColor" min="0.0" max="0.5" value="0.1" step="0.01"><span class="val" id="seedColorV">0.100</span></div>
+    </div>
+  </div>
+
+  <!-- SEED -->
+  <div class="section">
+    <div class="section-label">seed</div>
+    <div class="ctrl">
+      <label>seed mode</label>
+      <select id="seedMode">
+        <option value="auto">auto — advances each cycle</option>
+        <option value="manual">manual — locked to slider</option>
+      </select>
+    </div>
+    <div class="ctrl"><label>manual seed</label>
+      <div class="ctrl-row"><input type="range" id="manualSeed" min="0" max="9999" value="0" step="1"><span class="val" id="manualSeedV">0</span></div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="actions">
+    <div class="btn-row">
+      <button id="pauseBtn">pause<kbd>space</kbd></button>
+      <button id="fullscreenBtn">fullscreen<kbd>f</kbd></button>
+    </div>
+    <div class="btn-row">
+      <button class="export-btn" id="exportBtn">save PNG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── slider param helper ───────────────────────────────────────────────
+function pv(id) {
+  const el  = document.getElementById(id);
+  const dsp = document.getElementById(id + 'V');
+  if (dsp) {
+    const fmt = v => parseFloat(el.step) < 0.01 ? parseFloat(v).toFixed(3)
+                   : parseFloat(el.step) < 1    ? parseFloat(v).toFixed(3)
+                   : v;
+    dsp.textContent = fmt(el.value);
+    el.addEventListener('input', () => { dsp.textContent = fmt(el.value); });
+  }
+  return () => parseFloat(el.value);
+}
+
+const getCycleDuration  = pv('cycleDuration');
+const getTimeSpeed      = pv('timeSpeed');
+const getZoomSpeed      = pv('zoomSpeed');
+const getZoomMin        = pv('zoomMin');
+const getZoomMax        = pv('zoomMax');
+const getRotStart       = pv('rotStart');
+const getMaxRot         = pv('maxRot');
+const getMaxIter        = pv('maxIter');
+const getNumMirrors     = pv('numMirrors');
+const getFoldOffset     = pv('foldOffset');
+const getShiftBase      = pv('shiftBase');
+const getWobbleSpeed    = pv('wobbleSpeed');
+const getWobbleAmp      = pv('wobbleAmp');
+const getDustSharpness  = pv('dustSharpness');
+const getDustScale      = pv('dustScale');
+const getIntensityExp   = pv('intensityExp');
+const getDustGlow       = pv('dustGlow');
+const getLineThick      = pv('lineThick');
+const getLineFlicker    = pv('lineFlicker');
+const getLineIntensity  = pv('lineIntensity');
+const getBrightness     = pv('brightness');
+const getVignette       = pv('vignette');
+const getPalA           = pv('palA');
+const getPalB           = pv('palB');
+const getColorStep      = pv('colorStep');
+const getDistColor      = pv('distColor');
+const getSeedColor      = pv('seedColor');
+const getManualSeed     = pv('manualSeed');
+
+// ── panel / keyboard ──────────────────────────────────────────────────
+const panel    = document.getElementById('panel');
+const pauseBtn = document.getElementById('pauseBtn');
+
+document.getElementById('toggle-panel').addEventListener('click', () => panel.classList.toggle('hidden'));
+document.getElementById('fullscreenBtn').addEventListener('click', () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
+
+let paused = false;
+pauseBtn.addEventListener('click', () => {
+  paused = !paused;
+  pauseBtn.classList.toggle('active', paused);
+  pauseBtn.innerHTML = (paused ? 'resume' : 'pause') + '<kbd>space</kbd>';
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); pauseBtn.click(); }
+  if (e.key === 'f' || e.key === 'F') document.getElementById('fullscreenBtn').click();
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (window._sketchExport) window._sketchExport();
+});
+
+// ── p5 sketch ─────────────────────────────────────────────────────────
+new p5(function(p) {
+  let theShader;
+
+  const vert = `
+    precision highp float;
+    attribute vec3 aPosition;
+    void main() {
+      gl_Position = vec4(aPosition, 1.0);
+    }
+  `;
+
+  const frag = `
+    precision highp float;
+    uniform vec2  u_resolution;
+    uniform float u_time;
+    uniform float u_zoom;
+    uniform float u_opacity;
+    uniform float u_seed;
+    uniform float u_rotation;
+
+    uniform float u_timeSpeed;
+    uniform float u_maxIter;
+    uniform float u_numMirrors;
+    uniform float u_foldOffset;
+    uniform float u_shiftBase;
+    uniform float u_wobbleSpeed;
+    uniform float u_wobbleAmp;
+    uniform float u_dustSharpness;
+    uniform float u_dustScale;
+    uniform float u_intensityExp;
+    uniform float u_dustGlow;
+    uniform float u_lineThick;
+    uniform float u_lineFlicker;
+    uniform float u_lineIntensity;
+    uniform float u_brightness;
+    uniform float u_vignette;
+    uniform float u_palA;
+    uniform float u_palB;
+    uniform float u_colorStep;
+    uniform float u_distColor;
+    uniform float u_seedColor;
+
+    vec3 getRainbow(float t) {
+      vec3 a = vec3(u_palA);
+      vec3 b = vec3(u_palB);
+      vec3 d = vec3(0.0, 0.33, 0.67);
+      return a + b * cos(6.28318 * (t + d));
+    }
+
+    vec2 fold(vec2 p, float n) {
+      float r = length(p);
+      float a = atan(p.y, p.x) - u_foldOffset;
+      float tau = 6.28318;
+      a = mod(a, tau / n) - tau / (n * 2.0);
+      a = abs(a);
+      return vec2(cos(a), sin(a)) * r;
+    }
+
+    void main() {
+      vec2 p = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.y, u_resolution.x);
+
+      p = fold(p, u_numMirrors);
+
+      float cosR = cos(u_rotation);
+      float sinR = sin(u_rotation);
+      p = vec2(p.x * cosR - p.y * sinR, p.x * sinR + p.y * cosR);
+
+      p *= u_zoom;
+
+      float t = u_time * u_timeSpeed;
+      vec3 color = vec3(0.0);
+
+      vec2 shift = vec2(u_shiftBase + sin(u_seed * 1.5) * 0.1,
+                        u_shiftBase + cos(u_seed * 0.7) * 0.1);
+
+      for (int i = 0; i < 12; i++) {
+        if (float(i) >= u_maxIter) break;
+
+        p = abs(p) / dot(p, p) - (shift + sin(t * u_wobbleSpeed + u_seed) * u_wobbleAmp);
+
+        float dust = smoothstep(u_dustSharpness, 0.0, length(fract(p * u_dustScale) - 0.5));
+
+        float colorShift = t + float(i) * u_colorStep + length(p) * u_distColor + u_seed * u_seedColor;
+        vec3 dustColor = getRainbow(colorShift);
+
+        float intensity = pow(float(i + 1), u_intensityExp);
+        color += dustColor * dust * intensity * u_dustGlow;
+
+        float line = u_lineThick / abs(p.x + p.y + sin(t * u_lineFlicker + float(i) + u_seed));
+        color += getRainbow(colorShift + 0.5) * line * u_lineIntensity;
+      }
+
+      color *= u_brightness;
+      color *= smoothstep(u_vignette, 0.0, length(p));
+
+      gl_FragColor = vec4(color * u_opacity, 1.0);
+    }
+  `;
+
+  p.setup = function() {
+    const cnv = p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
+    cnv.parent('sketch-container');
+    p.pixelDensity(1);
+    theShader = p.createShader(vert, frag);
+  };
+
+  p.windowResized = function() {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+  };
+
+  window._sketchExport = () => p.saveCanvas('kaleidoscope', 'png');
+
+  p.draw = function() {
+    if (paused) return;
+
+    p.shader(theShader);
+
+    const cycleDuration = getCycleDuration();
+    const absoluteTime  = p.millis() / 1000.0;
+    const t             = absoluteTime % cycleDuration;
+    const loopSeed      = Math.floor(absoluteTime / cycleDuration);
+
+    const seedMode   = document.getElementById('seedMode').value;
+    const activeSeed = seedMode === 'manual' ? getManualSeed() : loopSeed;
+
+    const zoomPulse   = Math.sin(t * getZoomSpeed());
+    const currentZoom = p.map(zoomPulse, 1, -1, getZoomMin(), getZoomMax());
+
+    let rotationAngle = 0;
+    const rotationStart = (getRotStart() / 100.0) * cycleDuration;
+    if (t > rotationStart) {
+      p.randomSeed(loopSeed * 999);
+      const direction = p.random() > 0.5 ? 1 : -1;
+      const maxRot    = getMaxRot() * Math.PI / 180;
+      rotationAngle   = direction * p.map(t, rotationStart, cycleDuration, 0, maxRot);
+    }
+
+    let opacity = 0.0;
+    const fadeIn    = cycleDuration * (1.0  / 78.5);
+    const fadeInEnd = cycleDuration * (16.0 / 78.5);
+    const fadeOut   = cycleDuration * (73.5 / 78.5);
+    if      (t < fadeIn)    { opacity = 0.0; }
+    else if (t < fadeInEnd) { opacity = p.map(t, fadeIn, fadeInEnd, 0.0, 1.0); }
+    else if (t < fadeOut)   { opacity = 1.0; }
+    else                    { opacity = p.map(t, fadeOut, cycleDuration, 1.0, 0.0); }
+
+    theShader.setUniform('u_resolution',    [p.width, p.height]);
+    theShader.setUniform('u_time',          t);
+    theShader.setUniform('u_zoom',          currentZoom);
+    theShader.setUniform('u_opacity',       opacity);
+    theShader.setUniform('u_seed',          activeSeed);
+    theShader.setUniform('u_rotation',      rotationAngle);
+    theShader.setUniform('u_timeSpeed',     getTimeSpeed());
+    theShader.setUniform('u_maxIter',       getMaxIter());
+    theShader.setUniform('u_numMirrors',    getNumMirrors());
+    theShader.setUniform('u_foldOffset',    getFoldOffset());
+    theShader.setUniform('u_shiftBase',     getShiftBase());
+    theShader.setUniform('u_wobbleSpeed',   getWobbleSpeed());
+    theShader.setUniform('u_wobbleAmp',     getWobbleAmp());
+    theShader.setUniform('u_dustSharpness', getDustSharpness());
+    theShader.setUniform('u_dustScale',     getDustScale());
+    theShader.setUniform('u_intensityExp',  getIntensityExp());
+    theShader.setUniform('u_dustGlow',      getDustGlow());
+    theShader.setUniform('u_lineThick',     getLineThick());
+    theShader.setUniform('u_lineFlicker',   getLineFlicker());
+    theShader.setUniform('u_lineIntensity', getLineIntensity());
+    theShader.setUniform('u_brightness',    getBrightness());
+    theShader.setUniform('u_vignette',      getVignette());
+    theShader.setUniform('u_palA',          getPalA());
+    theShader.setUniform('u_palB',          getPalB());
+    theShader.setUniform('u_colorStep',     getColorStep());
+    theShader.setUniform('u_distColor',     getDistColor());
+    theShader.setUniform('u_seedColor',     getSeedColor());
+
+    p.quad(-1, -1, 1, -1, 1, 1, -1, 1);
+  };
+}, 'sketch-container');
+</script>
+</body>
+</html>
